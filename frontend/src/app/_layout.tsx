@@ -9,7 +9,7 @@ export default function RootLayout() {
     <Stack
       screenOptions={{
         header: () => (
-          <View className="h-24 flex-row items-center justify-between bg-white shadow-md">
+          <View className="h-24 flex-row items-center justify-between bg-white shadow-md mt-14">
             <View className="h-24 flex-row items-center gap-3 ml-5">
               <Image
                 source={require("../../assets/images/appIcons/safecuu-logo.png")}
