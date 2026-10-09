@@ -70,12 +70,12 @@ export default function Perfil() {
                   onPress={() => {
                     if (
                       opcion.ruta === "/(tabs)/reportes" ||
-                      opcion.ruta === "/ayuda"
+                      opcion.ruta === "/ayuda" ||
+                      opcion.ruta === "/informacion-personal"
                     ) {
                       router.navigate(opcion.ruta);
                       return;
                     }
-
                     Alert.alert(
                       opcion.nombre,
                       "Esta pantalla aún no está disponible."
