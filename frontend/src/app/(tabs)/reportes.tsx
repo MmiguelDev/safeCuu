@@ -11,5 +11,5 @@ export default function Reportes() {
 
       
     </View>
-  );x`
+  );
 }

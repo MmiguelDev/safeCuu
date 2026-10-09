@@ -3,7 +3,7 @@ import { Image, View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 const Header = () => (
-  <View className="h-24 flex-row items-center justify-between bg-white shadow-md mt-14">
+  <View className="h-24 flex-row items-center justify-between bg-white shadow-md mt-10">
     <View className="h-24 flex-row items-center gap-3 ml-5">
       <Image
         source={require("../../../assets/images/appIcons/safecuu-logo.png")}
