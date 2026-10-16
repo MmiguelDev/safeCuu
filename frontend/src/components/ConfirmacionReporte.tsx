@@ -42,7 +42,7 @@ export default function ConfirmacionReporte({ reporte, onVer, onCerrar }: Props)
 
           <View className="flex-row gap-3 rounded-2xl border border-[#E7E5E4] bg-[#FAFAF9] p-3">
             {n > 0 ? (
-              <Image source={{ uri: reporte.fotos[0] }} className="h-20 w-20 rounded-xl" />
+              <Image source={{ uri: reporte.fotos[0] }} resizeMode="cover" className="h-20 w-20 rounded-xl" />
             ) : (
               <View className="h-20 w-20 items-center justify-center rounded-xl bg-[#F3F2F0]">
                 <Ionicons name={TIPO_UI[reporte.tipo].icono} size={28} color="#A8A29E" />

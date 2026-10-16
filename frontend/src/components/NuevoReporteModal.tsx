@@ -30,6 +30,7 @@ type Props = {
 const MAX_DESCRIPCION = 300;
 const MAX_FOTOS = 5;
 const MAX_FOTO_BYTES = 10 * 1024 * 1024;
+const TIMEOUT_UBICACION_MS = 10000;
 const TIPOS: Tipo[] = ["perdido", "encontrado", "peligro"];
 
 const campo = (error: boolean) =>
@@ -69,14 +70,20 @@ export default function NuevoReporteModal({ inicial, onClose, onGuardar }: Props
         Alert.alert("Permiso denegado", "Activa el permiso de ubicación para usar esta opción.");
         return;
       }
-      const { coords } = await Location.getCurrentPositionAsync({});
+      // Sin fix GPS getCurrentPositionAsync puede no resolver nunca: se corta a los 10 s.
+      const { coords } = await Promise.race([
+        Location.getCurrentPositionAsync({}),
+        new Promise<never>((_, rechazar) =>
+          setTimeout(() => rechazar(new globalThis.Error("timeout")), TIMEOUT_UBICACION_MS)
+        ),
+      ]);
       const [dir] = await Location.reverseGeocodeAsync(coords);
       const texto = dir
         ? [dir.street, dir.district ?? dir.subregion, dir.city].filter(Boolean).join(", ")
         : "";
       setUbicacion(texto || `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`);
     } catch {
-      Alert.alert("Error", "No se pudo obtener tu ubicación.");
+      Alert.alert("Error", "No se pudo obtener tu ubicación. Escríbela a mano.");
     } finally {
       setCargandoUbicacion(false);
     }
@@ -166,7 +173,7 @@ export default function NuevoReporteModal({ inicial, onClose, onGuardar }: Props
                 <TextInput
                   value={titulo}
                   onChangeText={setTitulo}
-                  placeholder="Ej. Gato perdido, Perro encontrado, Calle sin alumbrado"
+                  placeholder="Ej. Gato perdido, Calle sin alumbrado"
                   placeholderTextColor="#A8A29E"
                   className={`${campo(intentado && !titulo.trim())} h-11 text-[#1C1917]`}
                 />

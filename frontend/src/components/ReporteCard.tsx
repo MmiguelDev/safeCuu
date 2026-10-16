@@ -19,7 +19,7 @@ export default function ReporteCard({ reporte, onPress }: Props) {
     >
       <View className="items-center gap-1">
         {n > 0 ? (
-          <Image source={{ uri: reporte.fotos[0] }} className="h-24 w-24 rounded-2xl" />
+          <Image source={{ uri: reporte.fotos[0] }} resizeMode="cover" className="h-24 w-24 rounded-2xl" />
         ) : (
           <View className="h-24 w-24 items-center justify-center rounded-2xl bg-[#F3F2F0]">
             <Ionicons name={TIPO_UI[reporte.tipo].icono} size={32} color="#A8A29E" />

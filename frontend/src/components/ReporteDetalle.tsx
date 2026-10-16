@@ -44,7 +44,7 @@ export default function ReporteDetalle({ reporte, onCerrar, onEditar, onResolver
     );
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onCerrar}>
+    <Modal visible animationType="slide" statusBarTranslucent onRequestClose={onCerrar}>
       <SafeAreaView className="flex-1 bg-white">
         <Pressable
           onPress={onCerrar}
