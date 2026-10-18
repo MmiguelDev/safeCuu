@@ -1,9 +1,14 @@
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { Image, View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useAvatar } from "../../components/AvatarContext";
 
-const Header = () => (
-  <View className="h-24 flex-row items-center justify-between bg-white shadow-md mt-10">
+const Header = () => {
+  const router = useRouter();
+  const { avatarUri } = useAvatar();
+
+  return (
+  <View className="mt-10 h-24 flex-row items-center justify-between bg-white shadow-md">
     <View className="h-24 flex-row items-center gap-3 ml-5">
       <Image
         source={require("../../../assets/images/appIcons/safecuu-logo.png")}
@@ -16,11 +21,25 @@ const Header = () => (
         <Text className="text-sm text-gray-600 font-semibold">Tu ciudad segura</Text>
       </View>
     </View>
-    <Pressable className="mr-5">
-      <Ionicons name="person-circle-outline" size={64} classname="text-black" />
+    <Pressable
+      className="mr-5"
+      onPress={() => router.push("/informacion-personal")}
+      accessibilityRole="button"
+      accessibilityLabel="Abrir información personal"
+    >
+      {avatarUri ? (
+        <Image
+          source={{ uri: avatarUri }}
+          className="h-14 w-14 rounded-full"
+          accessibilityLabel="Foto de perfil"
+        />
+      ) : (
+        <Ionicons name="person-circle-outline" size={64} color="#000000" />
+      )}
     </Pressable>
   </View>
-);
+  );
+};
 
 export default function TabLayout() {
   return (
