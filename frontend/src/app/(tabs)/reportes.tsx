@@ -23,7 +23,7 @@ const FILTROS: { id: Filtro; label: string; icono: keyof typeof Ionicons.glyphMa
 const siguienteFolio = (rs: Reporte[]) =>
   String(Math.max(0, ...rs.map((r) => Number(r.id) || 0)) + 1).padStart(4, "0");
 
-// iOS no deja presentar un Modal mientras otro se está cerrando: se espera a que termine.
+
 const luego = (fn: () => void) => setTimeout(fn, 350);
 
 export default function Reportes() {
