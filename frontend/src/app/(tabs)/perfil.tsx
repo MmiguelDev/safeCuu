@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { useRouter } from "expo-router";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 
 const secciones = [
@@ -39,6 +39,8 @@ const secciones = [
 ];
 
 export default function Perfil() {
+  const router = useRouter();
+
   return (
     <ScrollView className="flex-1 bg-gray-50">
       <View className="mx-auto w-full max-w-2xl px-5 pb-10 pt-6">

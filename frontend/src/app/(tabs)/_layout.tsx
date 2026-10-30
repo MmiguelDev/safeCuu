@@ -45,7 +45,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        header: Header,
+        header: () => <Header />,
         tabBarActiveTintColor: "#c0392b",
       }}
     >
@@ -54,7 +54,7 @@ export default function TabLayout() {
         options={{
           title: "Inicio",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "home" : "home-outline"} color={color} size={24} />
+            <Ionicons name={focused ? "home" : "home-outline"} color={color as string} size={24} />
           ),
         }}
       />
@@ -63,7 +63,7 @@ export default function TabLayout() {
         options={{
           title: "Reportes",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "document-text" : "document-text-outline"} color={color} size={24} />
+            <Ionicons name={focused ? "document-text" : "document-text-outline"} color={color as string} size={24} />
           ),
         }}
       />
@@ -87,7 +87,7 @@ export default function TabLayout() {
         options={{
           title: "Alertas",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "alert-circle" : "alert-circle-outline"} color={color} size={24} />
+            <Ionicons name={focused ? "alert-circle" : "alert-circle-outline"} color={color as string} size={24} />
           ),
         }}
       />
@@ -96,7 +96,7 @@ export default function TabLayout() {
         options={{
           title: "Perfil",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "person" : "person-outline"} color={color} size={24} />
+            <Ionicons name={focused ? "person" : "person-outline"} color={color as string} size={24} />
           ),
         }}
       />

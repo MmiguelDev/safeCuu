@@ -18,7 +18,7 @@ export default function Index() {
     <SafeAreaProvider>
       <View className="flex-1">
         <ImageBackground
-          source={require("frontend/assets/images/appSource/mapa-chihuahua.png")}
+          source={require("../../../assets/images/appSource/mapa-chihuahua.png")}
           resizeMode="cover"
           className="flex-1"
         >
