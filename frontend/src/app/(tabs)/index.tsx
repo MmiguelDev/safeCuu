@@ -1,7 +1,10 @@
-import { useState } from "react";
-import { Text, View, ImageBackground, TextInput, Pressable } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Text, View, StyleSheet, TextInput, Pressable } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+
+import MapView from "react-native-maps";
 
 import type { TipoAlerta, AlertaData } from "../../components/AlertaFormBase";
 import AlertaAnimalModal from "../../components/AlertaAnimalModal";
@@ -9,6 +12,21 @@ import ZonaRiesgoModal from "../../components/ZonaRiesgoModal";
 
 export default function Index() {
   const [alerta, setAlerta] = useState<TipoAlerta | null>(null);
+  const mapa = useRef<MapView>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      const { coords } = await Location.getCurrentPositionAsync({});
+      mapa.current?.animateToRegion({
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    })().catch(() => {});
+  }, []);
 
   const guardarAlerta = (data: AlertaData) => {
     console.log("Alerta enviada:", data); // aquí conectas tu backend / AsyncStorage
@@ -17,12 +35,20 @@ export default function Index() {
   return (
     <SafeAreaProvider>
       <View className="flex-1">
-        <ImageBackground
-          source={require("frontend/assets/images/appSource/mapa-chihuahua.png")}
-          resizeMode="cover"
-          className="flex-1"
-        >
-          <View className="flex-1 items-center m-5 justify-between">
+        <MapView
+          ref={mapa}
+          style={StyleSheet.absoluteFill}
+          showsUserLocation
+          showsMyLocationButton
+          initialRegion={{
+            latitude: 28.6353,
+            longitude: -106.0889,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          }}
+        />
+
+          <View pointerEvents="box-none" className="flex-1 items-center m-5 justify-between">
             <View className="flex-row items-center justify-center w-full">
               <TextInput
                 editable
@@ -64,9 +90,9 @@ export default function Index() {
                   Zona de riesgo
                 </Text>
               </Pressable>
+            </View>
           </View>
-      </View>
-    </ImageBackground>
+
       </View >
 
       <AlertaAnimalModal
