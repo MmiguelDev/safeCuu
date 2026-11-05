@@ -63,10 +63,12 @@ export default function AlertaFormBase({
   // Limpia el formulario cada vez que se abre
   useEffect(() => {
     if (visible) {
+      /* eslint-disable react-hooks/set-state-in-effect */
       setUbicacion("");
       setCoords(null);
       setDescripcion("");
       setFotoUri(null);
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [visible]);
 

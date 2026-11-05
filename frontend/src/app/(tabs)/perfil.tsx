@@ -13,6 +13,10 @@ const secciones = [
         nombre: "Mis reportes",
         ruta: "/(tabs)/reportes",
       },
+      {
+        nombre: "Contactos de emergencia",
+        ruta: "/contactos-emergencia",
+      },
     ],
   },
   {
@@ -73,7 +77,8 @@ export default function Perfil() {
                     if (
                       opcion.ruta === "/(tabs)/reportes" ||
                       opcion.ruta === "/ayuda" ||
-                      opcion.ruta === "/informacion-personal"
+                      opcion.ruta === "/informacion-personal" ||
+                      opcion.ruta === "/contactos-emergencia"
                     ) {
                       router.navigate(opcion.ruta);
                       return;
