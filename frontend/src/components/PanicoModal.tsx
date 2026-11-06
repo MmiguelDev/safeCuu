@@ -13,10 +13,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { Contacto } from "../types/contacto";
 import {
-  ResultadoEnvio,
+  EstadoEnvio,
   enviarSMSEmergencia,
   obtenerUbicacion,
 } from "../utils/enviarEmergencia";
+
+const ICONO_ESTADO: Record<EstadoEnvio, { name: keyof typeof Ionicons.glyphMap; color: string; texto: string }> = {
+  enviando:      { name: "radio-outline",          color: "#A16F1D", texto: "Enviando" },
+  enviado:       { name: "checkmark-circle",       color: "#4F8A67", texto: "Enviado" },
+  sin_confirmar: { name: "help-circle-outline",    color: "#A16F1D", texto: "Sin confirmar" },
+  cancelado:     { name: "remove-circle-outline",  color: "#B84A4A", texto: "Cancelado" },
+  error:         { name: "close-circle",           color: "#B84A4A", texto: "Error" },
+};
 
 const STORAGE_KEY = "safecuu:contactos_emergencia";
 
@@ -31,7 +39,7 @@ type Props = {
 export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
   const [fase, setFase] = useState<Fase>("idle");
   const [contactos, setContactos] = useState<Contacto[]>([]);
-  const [resultados, setResultados] = useState<Record<string, ResultadoEnvio["estado"]>>({});
+  const [resultados, setResultados] = useState<Record<string, EstadoEnvio>>({});
 
   const overlayOpacity = useSharedValue(0);
   const sheetOpacity   = useSharedValue(0);
@@ -109,16 +117,26 @@ export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
     setFase("enviando");
     stopRings();
 
-    const ubicacion = await obtenerUbicacion();
-
-    const setEstado = (id: string, estado: ResultadoEnvio["estado"]) =>
+    const setEstado = (id: string, estado: EstadoEnvio) =>
       setResultados((prev) => ({ ...prev, [id]: estado }));
 
-    await enviarSMSEmergencia(contactos, ubicacion, setEstado);
-
-    setFase("listo");
-    onConfirm();
-    setTimeout(onClose, 3500);
+    try {
+      const ubicacion = await obtenerUbicacion();
+      await enviarSMSEmergencia(contactos, ubicacion, setEstado);
+    } catch {
+      // Cualquier fallo inesperado: marcar como error lo que siga pendiente
+      setResultados((prev) => {
+        const next = { ...prev };
+        [...contactos.map((c) => c.id), "policia"].forEach((id) => {
+          if (!next[id] || next[id] === "enviando") next[id] = "error";
+        });
+        return next;
+      });
+    } finally {
+      // Mostramos el resultado; el usuario cierra manualmente.
+      setFase("listo");
+      onConfirm();
+    }
   };
 
   const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOpacity.value }));
@@ -134,10 +152,19 @@ export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
   ];
   const sinContactos = contactos.length === 0;
 
+  const estadosContactos = contactos.map((c) => resultados[c.id]);
+  const algunoOk = estadosContactos.some((e) => e === "enviado" || e === "sin_confirmar");
+  const todosEnviados = estadosContactos.length > 0 && estadosContactos.every((e) => e === "enviado");
+  const resumen = todosEnviados
+    ? { titulo: "Alerta enviada", icono: "checkmark-circle" as const, color: "#4F8A67", fondo: "#E4EFE8" }
+    : algunoOk
+    ? { titulo: "Revisa el envío", icono: "alert-circle" as const, color: "#A16F1D", fondo: "#FBF1DF" }
+    : { titulo: "No se pudo enviar", icono: "close-circle" as const, color: "#B84A4A", fondo: "#FEF2F2" };
+
   return (
-    <Modal visible transparent animationType="none" onRequestClose={fase === "idle" ? onClose : undefined} statusBarTranslucent>
+    <Modal visible transparent animationType="none" onRequestClose={fase !== "enviando" ? onClose : undefined} statusBarTranslucent>
       <Animated.View style={[{ position: "absolute", inset: 0, backgroundColor: "rgba(28,25,23,0.5)" }, overlayStyle]}>
-        <Pressable style={{ flex: 1 }} onPress={fase === "idle" ? onClose : undefined} />
+        <Pressable style={{ flex: 1 }} onPress={fase !== "enviando" ? onClose : undefined} />
       </Animated.View>
 
       <Animated.View
@@ -157,22 +184,45 @@ export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
         {/* ── Listo ── */}
         {fase === "listo" ? (
           <>
-            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: "#E4EFE8", alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="checkmark-circle" size={44} color="#4F8A67" />
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: resumen.fondo, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name={resumen.icono} size={44} color={resumen.color} />
             </View>
-            <Text style={{ fontSize: 20, fontWeight: "700", color: "#1C1917" }}>Alerta enviada</Text>
+            <Text accessibilityRole="header" style={{ fontSize: 20, fontWeight: "700", color: "#1C1917" }}>{resumen.titulo}</Text>
             <View style={{ width: "100%", gap: 8 }}>
-              {destinatarios.map((t) => (
-                <View key={t.id} style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, backgroundColor: "#FAFAF9", borderWidth: 1, borderColor: "#E7E5E4" }}>
-                  <Ionicons name={t.icono} size={20} color="#57534E" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#1C1917" }}>{t.nombre}</Text>
-                    <Text style={{ fontSize: 12, color: "#57534E" }}>{t.sub}</Text>
+              {destinatarios.map((t) => {
+                const info = ICONO_ESTADO[resultados[t.id] ?? "error"];
+                return (
+                  <View
+                    key={t.id}
+                    accessible
+                    accessibilityLabel={`${t.nombre}: ${info.texto}`}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, backgroundColor: "#FAFAF9", borderWidth: 1, borderColor: "#E7E5E4" }}
+                  >
+                    <Ionicons name={t.icono} size={20} color="#57534E" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#1C1917" }}>{t.nombre}</Text>
+                      <Text style={{ fontSize: 12, color: "#57534E" }}>{t.sub}</Text>
+                    </View>
+                    <Text style={{ fontSize: 12, fontWeight: "600", color: info.color }}>{info.texto}</Text>
+                    <Ionicons name={info.name} size={20} color={info.color} />
                   </View>
-                  <Ionicons name="checkmark-circle" size={20} color="#4F8A67" />
-                </View>
-              ))}
+                );
+              })}
             </View>
+            {!todosEnviados && (
+              <Text style={{ fontSize: 13, color: "#57534E", textAlign: "center", lineHeight: 18 }}>
+                {algunoOk
+                  ? "Confirma en tu app de Mensajes que el SMS se haya enviado."
+                  : "Llama directamente al 911 o a tus contactos."}
+              </Text>
+            )}
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              style={{ width: "100%", height: 50, borderRadius: 16, backgroundColor: "#F3F2F0", alignItems: "center", justifyContent: "center" }}
+            >
+              <Text style={{ fontSize: 15, fontWeight: "700", color: "#1C1917" }}>Cerrar</Text>
+            </Pressable>
           </>
         ) : (
           <>
@@ -218,10 +268,9 @@ export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
                         <Text style={{ fontSize: 14, fontWeight: "600", color: "#1C1917" }}>{t.nombre}</Text>
                         <Text style={{ fontSize: 12, color: "#57534E" }}>{t.sub}</Text>
                       </View>
-                      {!estado && <Ionicons name="ellipsis-horizontal" size={18} color="#A8A29E" />}
-                      {estado === "enviando" && <Ionicons name="radio-outline" size={18} color="#A16F1D" />}
-                      {estado === "enviado"  && <Ionicons name="checkmark-circle" size={20} color="#4F8A67" />}
-                      {estado === "error"    && <Ionicons name="close-circle" size={20} color="#B84A4A" />}
+                      {estado
+                        ? <Ionicons name={ICONO_ESTADO[estado].name} size={20} color={ICONO_ESTADO[estado].color} />
+                        : <Ionicons name="ellipsis-horizontal" size={18} color="#A8A29E" />}
                     </View>
                   );
                 })}

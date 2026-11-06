@@ -122,8 +122,8 @@ export default function TabLayout() {
         visible={panicoVisible}
         onClose={() => setPanicoVisible(false)}
         onConfirm={() => {
-          setPanicoVisible(false);
-          // TODO: conectar con backend
+          // El modal permanece abierto mostrando el resultado; se cierra con onClose.
+          // TODO: registrar el evento en el backend
         }}
       />
     </>
