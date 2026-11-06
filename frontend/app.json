@@ -33,6 +33,26 @@
           "imageWidth": 76
         }
       ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "SafeCuu usa tu ubicación para mostrarte en el mapa, ubicar tus reportes y alertas, y enviarla a tus contactos en una emergencia."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SafeCuu necesita acceso a tus fotos para adjuntarlas a reportes y alertas, y para tu foto de perfil.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "SafeCuu accede a tus contactos solo para que elijas a tus contactos de emergencia."
+        }
+      ],
       "expo-font",
       "expo-image",
       "expo-status-bar",

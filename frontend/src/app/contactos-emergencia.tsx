@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Contact, requestPermissionsAsync } from "expo-contacts";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -9,11 +10,14 @@ import { Contacto } from "../types/contacto";
 const STORAGE_KEY = "safecuu:contactos_emergencia";
 
 const nuevoId = () => Date.now().toString();
+const soloDigitos = (s: string) => s.replace(/\D/g, "");
 
 export default function ContactosEmergencia() {
   const router = useRouter();
   const [contactos, setContactos] = useState<Contacto[]>([]);
   const [form, setForm]           = useState<Partial<Contacto> | null>(null);
+  const [opcionesTelefono, setOpcionesTelefono] = useState<string[]>([]);
+  const [eligiendo, setEligiendo] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
@@ -26,17 +30,74 @@ export default function ContactosEmergencia() {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(lista)).catch(() => {});
   };
 
-  const abrirForm = (c?: Contacto) =>
+  const abrirForm = (c?: Contacto) => {
+    setOpcionesTelefono([]);
     setForm(c ?? { id: nuevoId(), nombre: "", telefono: "", relacion: "" });
+  };
 
-  const cerrarForm = () => setForm(null);
+  const cerrarForm = () => {
+    setOpcionesTelefono([]);
+    setForm(null);
+  };
+
+  const elegirDeAgenda = async () => {
+    if (eligiendo) return;
+    setEligiendo(true);
+    try {
+      const { granted, canAskAgain } = await requestPermissionsAsync();
+      if (!granted) {
+        Alert.alert(
+          "Permiso necesario",
+          "Permite el acceso a tus contactos para elegir uno. También puedes escribirlo manualmente.",
+          canAskAgain
+            ? [{ text: "Entendido" }]
+            : [
+                { text: "Cancelar", style: "cancel" },
+                { text: "Abrir ajustes", onPress: () => Linking.openSettings() },
+              ]
+        );
+        return;
+      }
+
+      const elegido = await Contact.presentPicker();
+      if (!elegido) return; // el usuario canceló
+
+      const [nombre, telefonos] = await Promise.all([elegido.getFullName(), elegido.getPhones()]);
+      const numeros = [
+        ...new Set(telefonos.map((t) => t.number?.trim()).filter((n): n is string => !!n)),
+      ];
+
+      if (numeros.length === 0) {
+        Alert.alert("Sin teléfono", `${nombre || "Este contacto"} no tiene un número guardado.`);
+        return;
+      }
+
+      setOpcionesTelefono(numeros.length > 1 ? numeros : []);
+      setForm((f) => ({ ...f, nombre: nombre || f?.nombre || "", telefono: numeros[0] }));
+    } catch {
+      Alert.alert("Error", "No se pudieron abrir tus contactos. Escríbelo manualmente.");
+    } finally {
+      setEligiendo(false);
+    }
+  };
 
   const confirmarGuardar = () => {
     if (!form?.nombre?.trim() || !form?.telefono?.trim()) {
       Alert.alert("Campos requeridos", "Nombre y teléfono son obligatorios.");
       return;
     }
-    const c = form as Contacto;
+    if (soloDigitos(form.telefono).length < 10) {
+      Alert.alert("Teléfono inválido", "El teléfono debe tener al menos 10 dígitos.");
+      return;
+    }
+    const repetido = contactos.find(
+      (x) => x.id !== form.id && soloDigitos(x.telefono).slice(-10) === soloDigitos(form.telefono!).slice(-10)
+    );
+    if (repetido) {
+      Alert.alert("Contacto repetido", `Ese número ya está guardado como ${repetido.nombre}.`);
+      return;
+    }
+    const c = { ...form, nombre: form.nombre.trim(), telefono: form.telefono.trim() } as Contacto;
     const existe = contactos.find((x) => x.id === c.id);
     guardar(existe ? contactos.map((x) => (x.id === c.id ? c : x)) : [...contactos, c]);
     cerrarForm();
@@ -151,6 +212,21 @@ export default function ContactosEmergencia() {
               {contactos.find((c) => c.id === form.id) ? "Editar contacto" : "Nuevo contacto"}
             </Text>
 
+            <Pressable
+              onPress={elegirDeAgenda}
+              disabled={eligiendo}
+              accessibilityRole="button"
+              accessibilityLabel="Elegir de mis contactos"
+              className="mb-4 flex-row items-center justify-center gap-2 rounded-2xl border border-[#E7E5E4] bg-[#FAFAF9] py-3.5 active:opacity-70"
+            >
+              {eligiendo ? (
+                <ActivityIndicator size="small" color="#3F4650" />
+              ) : (
+                <Ionicons name="person-add-outline" size={18} color="#3F4650" />
+              )}
+              <Text className="font-bold text-[#3F4650]">Elegir de mis contactos</Text>
+            </Pressable>
+
             <View className="gap-4">
               <Campo
                 label="Nombre"
@@ -165,6 +241,27 @@ export default function ContactosEmergencia() {
                 onChange={(v) => setForm((f) => ({ ...f, telefono: v }))}
                 keyboardType="phone-pad"
               />
+              {opcionesTelefono.length > 1 && (
+                <View className="gap-1.5">
+                  <Text className="text-xs font-semibold text-[#57534E]">Este contacto tiene varios números:</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {opcionesTelefono.map((n) => {
+                      const activo = form.telefono === n;
+                      return (
+                        <Pressable
+                          key={n}
+                          onPress={() => setForm((f) => ({ ...f, telefono: n }))}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: activo }}
+                          className={`rounded-full border px-3 py-1.5 ${activo ? "border-[#B84A4A] bg-[#FEF2F2]" : "border-[#E7E5E4] bg-white"}`}
+                        >
+                          <Text className={`text-sm ${activo ? "font-bold text-[#B84A4A]" : "text-[#1C1917]"}`}>{n}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
               <Campo
                 label="Relación (opcional)"
                 placeholder="Ej. Familiar, Amigo"
