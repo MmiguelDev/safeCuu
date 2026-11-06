@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { Contact, requestPermissionsAsync } from "expo-contacts";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { elegirContactoDeAgenda } from "../utils/elegirContacto";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -43,42 +43,12 @@ export default function ContactosEmergencia() {
   const elegirDeAgenda = async () => {
     if (eligiendo) return;
     setEligiendo(true);
-    try {
-      const { granted, canAskAgain } = await requestPermissionsAsync();
-      if (!granted) {
-        Alert.alert(
-          "Permiso necesario",
-          "Permite el acceso a tus contactos para elegir uno. También puedes escribirlo manualmente.",
-          canAskAgain
-            ? [{ text: "Entendido" }]
-            : [
-                { text: "Cancelar", style: "cancel" },
-                { text: "Abrir ajustes", onPress: () => Linking.openSettings() },
-              ]
-        );
-        return;
-      }
-
-      const elegido = await Contact.presentPicker();
-      if (!elegido) return; // el usuario canceló
-
-      const [nombre, telefonos] = await Promise.all([elegido.getFullName(), elegido.getPhones()]);
-      const numeros = [
-        ...new Set(telefonos.map((t) => t.number?.trim()).filter((n): n is string => !!n)),
-      ];
-
-      if (numeros.length === 0) {
-        Alert.alert("Sin teléfono", `${nombre || "Este contacto"} no tiene un número guardado.`);
-        return;
-      }
-
-      setOpcionesTelefono(numeros.length > 1 ? numeros : []);
-      setForm((f) => ({ ...f, nombre: nombre || f?.nombre || "", telefono: numeros[0] }));
-    } catch {
-      Alert.alert("Error", "No se pudieron abrir tus contactos. Escríbelo manualmente.");
-    } finally {
-      setEligiendo(false);
-    }
+    const elegido = await elegirContactoDeAgenda();
+    setEligiendo(false);
+    if (!elegido) return;
+    const { nombre, numeros } = elegido;
+    setOpcionesTelefono(numeros.length > 1 ? numeros : []);
+    setForm((f) => ({ ...f, nombre: nombre || f?.nombre || "", telefono: numeros[0] }));
   };
 
   const confirmarGuardar = () => {
@@ -131,7 +101,7 @@ export default function ContactosEmergencia() {
             Contactos de <Text className="text-[#B84A4A]">Emergencia</Text>
           </Text>
           <Text className="mt-1 text-[#57534E]">
-            Al activar el botón de pánico se les enviará un SMS con tu ubicación.
+            Al activar el botón de pánico se les enviará tu ubicación por WhatsApp (o SMS si no tienes WhatsApp).
           </Text>
         </View>
 

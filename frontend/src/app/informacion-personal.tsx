@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState, type ComponentProps } from "react";
 import {
   Alert,
   Image,
@@ -6,37 +6,26 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
-  type ImageSourcePropType,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { useFocusEffect, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAvatar } from "../components/AvatarContext";
+import { useAuth } from "../components/AuthContext";
+import { Contacto } from "../types/contacto";
+import { TIPOS_SANGRE, Usuario } from "../types/usuario";
 
-type ContactoEmergencia = {
-  id: string;
-  nombre: string;
-  parentesco: string;
-  telefono: string;
-};
+const STORAGE_CONTACTOS = "safecuu:contactos_emergencia";
 
-type Usuario = {
-  foto?: ImageSourcePropType;
-  nombre: string;
-  telefono: string;
-  correo: string;
-};
+/** Campos editables de la cuenta (el celular es el usuario y no se edita). */
+type Borrador = Pick<Usuario, "nombre" | "correo" | "tipoSangre">;
 
-const USUARIO_EJEMPLO: Usuario = {
-  nombre: "Juan Gabriel",
-  telefono: "614 123 4567",
-  correo: "elguerotranzas@gmail.com",
-};
-
-const CONTACTOS_EJEMPLO: ContactoEmergencia[] = [
-  { id: "1", nombre: "Axel Lares", parentesco: "Familiar", telefono: "614 273 9301" },
-  { id: "2", nombre: "Adrian Robles", parentesco: "Amigo", telefono: "614 385 9528" },
-];
+const CORREO_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const soloDigitos = (s: string) => s.replace(/\D/g, "");
 
 const iniciales = (nombre: string) =>
   nombre
@@ -47,22 +36,29 @@ const iniciales = (nombre: string) =>
     .join("");
 
 const llamar = (telefono: string) =>
-  Linking.openURL(`tel:${telefono.replace(/\s/g, "")}`);
+  Linking.openURL(`tel:${soloDigitos(telefono)}`).catch(() =>
+    Alert.alert("No se pudo llamar", "Tu dispositivo no puede realizar llamadas.")
+  );
 
-function Avatar({ usuario, avatarUri }: { usuario: Usuario; avatarUri: string | null }) {
+function Avatar({ nombre, avatarUri }: { nombre: string; avatarUri: string | null }) {
   if (avatarUri) {
     return (
       <Image
         source={{ uri: avatarUri }}
         className="h-28 w-28 rounded-full bg-slate-200"
-        accessibilityLabel={`Foto de ${usuario.nombre}`}
+        accessibilityLabel={nombre ? `Foto de ${nombre}` : "Tu foto de perfil"}
       />
     );
   }
 
+  const ini = iniciales(nombre);
   return (
     <View className="h-28 w-28 items-center justify-center rounded-full bg-[#C2C2C2]">
-      <Text className="text-4xl font-semibold text-white">{iniciales(usuario.nombre)}</Text>
+      {ini ? (
+        <Text className="text-4xl font-semibold text-white">{ini}</Text>
+      ) : (
+        <Ionicons name="person" size={52} color="white" />
+      )}
     </View>
   );
 }
@@ -71,18 +67,46 @@ function DatoPersonal({ etiqueta, valor }: { etiqueta: string; valor: string }) 
   return (
     <View className="py-3">
       <Text className="text-sm text-slate-500">{etiqueta}</Text>
-      <Text className="mt-0.5 text-base font-medium text-slate-900">{valor}</Text>
+      <Text className={`mt-0.5 text-base font-medium ${valor ? "text-slate-900" : "text-slate-400"}`}>
+        {valor || "Sin agregar"}
+      </Text>
     </View>
   );
 }
 
-function TarjetaContacto({ contacto }: { contacto: ContactoEmergencia }) {
+function CampoEditable({
+  etiqueta,
+  valor,
+  onChange,
+  ...rest
+}: {
+  etiqueta: string;
+  valor: string;
+  onChange: (v: string) => void;
+} & Omit<ComponentProps<typeof TextInput>, "value" | "onChangeText" | "onChange">) {
+  return (
+    <View className="py-2">
+      <Text className="mb-1 text-sm text-slate-500">{etiqueta}</Text>
+      <TextInput
+        value={valor}
+        onChangeText={onChange}
+        accessibilityLabel={etiqueta}
+        placeholderTextColor="#78716C"
+        className="rounded-xl border border-slate-300 px-3 py-2.5 text-base text-slate-900"
+        {...rest}
+      />
+    </View>
+  );
+}
+
+function TarjetaContacto({ contacto }: { contacto: Contacto }) {
   return (
     <View className="flex-row items-center justify-between py-3">
       <View className="flex-1 pr-3">
         <Text className="text-base font-medium text-slate-900">{contacto.nombre}</Text>
         <Text className="text-sm text-slate-500">
-          {contacto.parentesco} · {contacto.telefono}
+          {contacto.relacion ? `${contacto.relacion} · ` : ""}
+          {contacto.telefono}
         </Text>
       </View>
       <Pressable
@@ -98,9 +122,52 @@ function TarjetaContacto({ contacto }: { contacto: ContactoEmergencia }) {
 }
 
 export default function InformacionPersonal() {
-  const [usuario] = useState<Usuario>(USUARIO_EJEMPLO);
-  const [contactos] = useState<ContactoEmergencia[]>(CONTACTOS_EJEMPLO);
+  const router = useRouter();
+  const { usuario: cuenta, actualizarUsuario } = useAuth();
+  const usuario: Borrador = {
+    nombre: cuenta?.nombre ?? "",
+    correo: cuenta?.correo ?? "",
+    tipoSangre: cuenta?.tipoSangre ?? null,
+  };
+  const telefonoCuenta = cuenta?.telefono ?? "";
+  const [borrador, setBorrador] = useState<Borrador | null>(null);
+  const [contactos, setContactos] = useState<Contacto[]>([]);
   const { avatarUri, setAvatarUri } = useAvatar();
+
+  // Recargar contactos al volver de la pantalla de contactos de emergencia
+  useFocusEffect(
+    useCallback(() => {
+      AsyncStorage.getItem(STORAGE_CONTACTOS)
+        .then((v) => setContactos(v ? JSON.parse(v) : []))
+        .catch(() => {});
+    }, [])
+  );
+
+  const editando = borrador !== null;
+
+  const guardarInformacion = () => {
+    if (!borrador) return;
+    const limpio: Borrador = {
+      nombre: borrador.nombre.trim(),
+      correo: borrador.correo.trim().toLowerCase(),
+      tipoSangre: borrador.tipoSangre,
+    };
+    if (!limpio.nombre) {
+      Alert.alert("Nombre requerido", "Escribe tu nombre.");
+      return;
+    }
+    if (!CORREO_VALIDO.test(limpio.correo)) {
+      Alert.alert("Correo inválido", "Revisa tu correo electrónico.");
+      return;
+    }
+    setBorrador(null);
+    actualizarUsuario(limpio).catch(() =>
+      Alert.alert("Error", "No se pudo guardar tu información.")
+    );
+  };
+
+  const formatearTelefono = (t: string) =>
+    t.length === 10 ? `${t.slice(0, 3)} ${t.slice(3, 6)} ${t.slice(6)}` : t;
 
   const cambiarFoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -124,19 +191,72 @@ export default function InformacionPersonal() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
-      <ScrollView contentContainerClassName="px-5 pb-10 pt-6">
+      <ScrollView contentContainerClassName="px-5 pb-10 pt-6" keyboardShouldPersistTaps="handled">
         <View className="items-center">
-          <Avatar usuario={usuario} avatarUri={avatarUri} />
-          <Text className="mt-4 text-2xl font-bold text-slate-900">{usuario.nombre}</Text>
-          <Pressable onPress={cambiarFoto} className="mt-2 active:opacity-70">
+          <Avatar nombre={usuario.nombre} avatarUri={avatarUri} />
+          <Text className="mt-4 text-2xl font-bold text-slate-900">
+            {usuario.nombre || "Tu perfil"}
+          </Text>
+          <Pressable onPress={cambiarFoto} accessibilityRole="button" className="mt-2 active:opacity-70">
             <Text className="font-medium text-[#000000]">Cambiar foto</Text>
           </Pressable>
         </View>
 
         <View className="mt-8 rounded-2xl bg-white px-5 py-2">
-          <DatoPersonal etiqueta="Teléfono" valor={usuario.telefono} />
-          <View className="h-px bg-slate-200" />
-          <DatoPersonal etiqueta="Correo electrónico" valor={usuario.correo} />
+          {borrador ? (
+            <>
+              <CampoEditable
+                etiqueta="Nombre"
+                valor={borrador.nombre}
+                onChange={(nombre) => setBorrador({ ...borrador, nombre })}
+                placeholder="Tu nombre"
+                autoCapitalize="words"
+                textContentType="name"
+              />
+              <CampoEditable
+                etiqueta="Correo electrónico"
+                valor={borrador.correo}
+                onChange={(correo) => setBorrador({ ...borrador, correo })}
+                placeholder="correo@ejemplo.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                textContentType="emailAddress"
+              />
+              <View className="py-2">
+                <Text className="mb-2 text-sm text-slate-500">Tipo de sangre</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {TIPOS_SANGRE.map((t) => {
+                    const activo = borrador.tipoSangre === t;
+                    return (
+                      <Pressable
+                        key={t}
+                        onPress={() => setBorrador({ ...borrador, tipoSangre: activo ? null : t })}
+                        accessibilityRole="radio"
+                        accessibilityLabel={`Tipo de sangre ${t}`}
+                        accessibilityState={{ selected: activo }}
+                        className={`min-w-[56px] items-center rounded-full border px-3 py-1.5 ${
+                          activo ? "border-[#B84A4A] bg-[#FEF2F2]" : "border-slate-300 bg-white"
+                        }`}
+                      >
+                        <Text className={`text-sm ${activo ? "font-bold text-[#B84A4A]" : "text-slate-900"}`}>{t}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+              <Text className="pb-2 text-xs text-slate-500">
+                Tu celular ({formatearTelefono(telefonoCuenta)}) es tu usuario y no se puede cambiar.
+              </Text>
+            </>
+          ) : (
+            <>
+              <DatoPersonal etiqueta="Celular" valor={formatearTelefono(telefonoCuenta)} />
+              <View className="h-px bg-slate-200" />
+              <DatoPersonal etiqueta="Correo electrónico" valor={usuario.correo} />
+              <View className="h-px bg-slate-200" />
+              <DatoPersonal etiqueta="Tipo de sangre" valor={usuario.tipoSangre ?? ""} />
+            </>
+          )}
         </View>
 
         <View className="mt-6 rounded-2xl bg-white px-5 py-4">
@@ -156,21 +276,42 @@ export default function InformacionPersonal() {
             </View>
           )}
           <Pressable
-            onPress={() => {}}
+            onPress={() => router.push("/contactos-emergencia")}
             accessibilityRole="button"
             className="mt-3 items-center rounded-xl border border-[#C2C2C2] py-3 active:opacity-70"
           >
-            <Text className="font-semibold text-[#000000]">Agregar contacto</Text>
+            <Text className="font-semibold text-[#000000]">
+              {contactos.length === 0 ? "Agregar contacto" : "Administrar contactos"}
+            </Text>
           </Pressable>
         </View>
 
-        <Pressable
-          onPress={() => {}}
-          accessibilityRole="button"
-          className="mt-6 items-center rounded-xl bg-[#C0392B] py-4 active:opacity-80"
-        >
-          <Text className="text-base font-semibold text-white">Editar información</Text>
-        </Pressable>
+        {editando ? (
+          <View className="mt-6 flex-row gap-3">
+            <Pressable
+              onPress={() => setBorrador(null)}
+              accessibilityRole="button"
+              className="flex-1 items-center rounded-xl bg-[#F3F2F0] py-4 active:opacity-80"
+            >
+              <Text className="text-base font-semibold text-slate-900">Cancelar</Text>
+            </Pressable>
+            <Pressable
+              onPress={guardarInformacion}
+              accessibilityRole="button"
+              className="flex-1 items-center rounded-xl bg-[#C0392B] py-4 active:opacity-80"
+            >
+              <Text className="text-base font-semibold text-white">Guardar</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            onPress={() => setBorrador(usuario)}
+            accessibilityRole="button"
+            className="mt-6 items-center rounded-xl bg-[#C0392B] py-4 active:opacity-80"
+          >
+            <Text className="text-base font-semibold text-white">Editar información</Text>
+          </Pressable>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

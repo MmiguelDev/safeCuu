@@ -1,5 +1,7 @@
 import { useRouter } from "expo-router";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../../components/AuthContext";
 
 const secciones = [
   {
@@ -44,6 +46,13 @@ const secciones = [
 
 export default function Perfil() {
   const router = useRouter();
+  const { cerrarSesion } = useAuth();
+
+  const confirmarCerrarSesion = () =>
+    Alert.alert("Cerrar sesión", "¿Seguro que quieres salir de tu cuenta?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Cerrar sesión", style: "destructive", onPress: () => { cerrarSesion().catch(() => {}); } },
+    ]);
 
   return (
     <ScrollView className="flex-1 bg-gray-50">
@@ -108,6 +117,15 @@ export default function Perfil() {
             </View>
           </View>
         ))}
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={confirmarCerrarSesion}
+          className="mt-2 min-h-14 flex-row items-center justify-center gap-2 rounded-2xl border border-[#F6C8C8] bg-[#FEF2F2] active:opacity-80"
+        >
+          <Ionicons name="log-out-outline" size={20} color="#B84A4A" />
+          <Text className="text-base font-bold text-[#B84A4A]">Cerrar sesión</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
