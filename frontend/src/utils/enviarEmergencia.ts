@@ -1,10 +1,11 @@
 import * as SMS from "expo-sms";
 import * as Location from "expo-location";
+import { AppState, Linking } from "react-native";
 import { Contacto } from "../types/contacto";
 
 /**
  * - enviado:       iOS confirmó el envío.
- * - sin_confirmar: se abrió la app de Mensajes pero el sistema no informa si se envió (siempre en Android).
+ * - sin_confirmar: se abrió WhatsApp o Mensajes, pero el sistema no informa si se envió.
  * - cancelado:     el usuario cerró el compositor sin enviar.
  * - error:         SMS no disponible o falló la llamada.
  */
@@ -49,13 +50,63 @@ export async function obtenerUbicacion(): Promise<string> {
   }
 }
 
-export async function enviarSMSEmergencia(
+const crearMensaje = (ubicacion: string) =>
+  `🚨 ALERTA DE EMERGENCIA\n` +
+  `Necesito ayuda urgente. Esta es mi ubicación:\n${ubicacion}\n\n` +
+  `— Enviado desde SafeCuu`;
+
+/** WhatsApp necesita el número internacional sin "+". Por defecto México (52). */
+export function telefonoWhatsApp(telefono: string): string {
+  const d = telefono.replace(/\D/g, "");
+  if (d.length === 10) return `52${d}`;
+  return d;
+}
+
+/**
+ * Espera a que el usuario salga de la app (a WhatsApp) y vuelva.
+ * Devuelve false si la app nunca salió (WhatsApp no se abrió).
+ */
+function esperarRegresoALaApp(): Promise<boolean> {
+  return new Promise((resolve) => {
+    let salio = false;
+    let terminado = false;
+    const terminar = (ok: boolean) => {
+      if (terminado) return;
+      terminado = true;
+      sub.remove();
+      clearTimeout(tSalida);
+      clearTimeout(tMaximo);
+      resolve(ok);
+    };
+    const sub = AppState.addEventListener("change", (estado) => {
+      if (estado !== "active") salio = true;
+      else if (salio) terminar(true);
+    });
+    // Si en 4 s la app no pasó a segundo plano, WhatsApp no se abrió.
+    const tSalida = setTimeout(() => { if (!salio) terminar(false); }, 4000);
+    // Límite de seguridad para no quedar colgados.
+    const tMaximo = setTimeout(() => terminar(salio), 5 * 60 * 1000);
+  });
+}
+
+async function abrirWhatsApp(telefono: string, mensaje: string): Promise<boolean> {
+  const url = `whatsapp://send?phone=${telefonoWhatsApp(telefono)}&text=${encodeURIComponent(mensaje)}`;
+  try {
+    const regreso = esperarRegresoALaApp();
+    await Linking.openURL(url);
+    return await regreso;
+  } catch {
+    return false; // WhatsApp no instalado
+  }
+}
+
+async function enviarPorSMS(
   contactos: Contacto[],
-  ubicacion: string,
+  mensaje: string,
   onEstado: (id: string, estado: EstadoEnvio) => void
-): Promise<void> {
-  const marcarContactos = (estado: EstadoEnvio) =>
-    contactos.forEach((c) => onEstado(c.id, estado));
+) {
+  const marcar = (estado: EstadoEnvio) => contactos.forEach((c) => onEstado(c.id, estado));
+  if (contactos.length === 0) return;
 
   let disponible = false;
   try {
@@ -63,35 +114,51 @@ export async function enviarSMSEmergencia(
   } catch {
     disponible = false;
   }
-
   if (!disponible) {
-    marcarContactos("error");
-    onEstado("policia", "error");
+    marcar("error");
     return;
   }
 
-  const mensaje =
-    `🚨 ALERTA DE EMERGENCIA\n` +
-    `Necesito ayuda urgente. Esta es mi ubicación:\n${ubicacion}\n\n` +
-    `— Enviado desde SafeCuu`;
+  marcar("enviando");
+  try {
+    const { result } = await SMS.sendSMSAsync(contactos.map((c) => c.telefono), mensaje);
+    marcar(result === "sent" ? "enviado" : result === "cancelled" ? "cancelado" : "sin_confirmar");
+  } catch {
+    marcar("error");
+  }
+}
 
-  const telefonos = contactos.map((c) => c.telefono);
-
-  marcarContactos("enviando");
+/**
+ * Envía la alerta por WhatsApp, un contacto a la vez: abre el chat con el mensaje
+ * escrito, el usuario lo envía y al volver a SafeCuu se abre el siguiente.
+ * Si WhatsApp no está disponible, envía a los contactos restantes por SMS.
+ */
+export async function enviarAlertaEmergencia(
+  contactos: Contacto[],
+  ubicacion: string,
+  onEstado: (id: string, estado: EstadoEnvio) => void
+): Promise<{ canal: "whatsapp" | "sms" }> {
+  const mensaje = crearMensaje(ubicacion);
   onEstado("policia", "enviando");
 
-  if (telefonos.length > 0) {
-    try {
-      const { result } = await SMS.sendSMSAsync(telefonos, mensaje);
-      marcarContactos(
-        result === "sent" ? "enviado" : result === "cancelled" ? "cancelado" : "sin_confirmar"
-      );
-    } catch {
-      marcarContactos("error");
+  let canal: "whatsapp" | "sms" = "whatsapp";
+  for (let i = 0; i < contactos.length; i++) {
+    const c = contactos[i];
+    onEstado(c.id, "enviando");
+    const ok = await abrirWhatsApp(c.telefono, mensaje);
+    if (ok) {
+      // WhatsApp no informa si el usuario presionó enviar.
+      onEstado(c.id, "sin_confirmar");
+      continue;
     }
+    // WhatsApp no disponible: SMS para este y los que faltan.
+    canal = "sms";
+    await enviarPorSMS(contactos.slice(i), mensaje, onEstado);
+    break;
   }
 
   // Policía: siempre se "notifica" (TODO: integrar con API de emergencias)
   await new Promise((r) => setTimeout(r, 800));
   onEstado("policia", "enviado");
+  return { canal };
 }

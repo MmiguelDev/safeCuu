@@ -14,14 +14,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { Contacto } from "../types/contacto";
 import {
   EstadoEnvio,
-  enviarSMSEmergencia,
+  enviarAlertaEmergencia,
   obtenerUbicacion,
 } from "../utils/enviarEmergencia";
 
 const ICONO_ESTADO: Record<EstadoEnvio, { name: keyof typeof Ionicons.glyphMap; color: string; texto: string }> = {
   enviando:      { name: "radio-outline",          color: "#A16F1D", texto: "Enviando" },
   enviado:       { name: "checkmark-circle",       color: "#4F8A67", texto: "Enviado" },
-  sin_confirmar: { name: "help-circle-outline",    color: "#A16F1D", texto: "Sin confirmar" },
+  sin_confirmar: { name: "help-circle-outline",    color: "#A16F1D", texto: "Abierto" },
   cancelado:     { name: "remove-circle-outline",  color: "#B84A4A", texto: "Cancelado" },
   error:         { name: "close-circle",           color: "#B84A4A", texto: "Error" },
 };
@@ -40,6 +40,7 @@ export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
   const [fase, setFase] = useState<Fase>("idle");
   const [contactos, setContactos] = useState<Contacto[]>([]);
   const [resultados, setResultados] = useState<Record<string, EstadoEnvio>>({});
+  const [canal, setCanal] = useState<"whatsapp" | "sms">("whatsapp");
 
   const overlayOpacity = useSharedValue(0);
   const sheetOpacity   = useSharedValue(0);
@@ -122,7 +123,8 @@ export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
 
     try {
       const ubicacion = await obtenerUbicacion();
-      await enviarSMSEmergencia(contactos, ubicacion, setEstado);
+      const r = await enviarAlertaEmergencia(contactos, ubicacion, setEstado);
+      setCanal(r.canal);
     } catch {
       // Cualquier fallo inesperado: marcar como error lo que siga pendiente
       setResultados((prev) => {
@@ -212,7 +214,9 @@ export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
             {!todosEnviados && (
               <Text style={{ fontSize: 13, color: "#57534E", textAlign: "center", lineHeight: 18 }}>
                 {algunoOk
-                  ? "Confirma en tu app de Mensajes que el SMS se haya enviado."
+                  ? canal === "whatsapp"
+                    ? "Revisa en WhatsApp que cada mensaje se haya enviado."
+                    : "Confirma en tu app de Mensajes que el SMS se haya enviado."
                   : "Llama directamente al 911 o a tus contactos."}
               </Text>
             )}
@@ -231,8 +235,8 @@ export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
             </Text>
             <Text style={{ fontSize: 14, color: "#57534E", textAlign: "center", lineHeight: 20 }}>
               {fase === "enviando"
-                ? "Notificando a tus contactos y autoridades."
-                : "Presiona el botón para notificar a tus familiares y a las autoridades con tu ubicación."}
+                ? "Se abrirá WhatsApp con tu ubicación para cada contacto. Presiona enviar y regresa a SafeCuu para continuar con el siguiente."
+                : "Presiona el botón para enviar tu ubicación por WhatsApp a tus contactos de emergencia."}
             </Text>
 
             {/* Botón con anillos */}
