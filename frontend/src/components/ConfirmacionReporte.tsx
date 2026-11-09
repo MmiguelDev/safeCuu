@@ -67,7 +67,7 @@ export default function ConfirmacionReporte({ reporte, onVer, onCerrar }: Props)
           <View className="flex-row items-center justify-center gap-2">
             <Ionicons name="information-circle-outline" size={16} color="#57534E" />
             <Text className="text-xs text-[#57534E]">
-              Folio <Text className="font-bold text-[#1C1917]">#{reporte.id}</Text> · Puedes consultarlo en Mis Reportes
+              Folio <Text className="font-bold text-[#1C1917]">#{reporte.folio}</Text> · Puedes consultarlo en Mis Reportes
             </Text>
           </View>
 

@@ -11,5 +11,8 @@ export type Alerta = {
   fecha: string; // ISO
   prioridad: Prioridad;
   reporteId?: string;
+  /** Folio del reporte origen, para mostrarlo. */
+  folio?: string;
+  foto?: string | null;
   leida: boolean;
 };

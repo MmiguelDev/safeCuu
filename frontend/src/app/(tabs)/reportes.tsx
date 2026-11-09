@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import ConfirmacionReporte from "../../components/ConfirmacionReporte";
 import NuevoReporteModal, { ReporteData } from "../../components/NuevoReporteModal";
 import ReporteCard from "../../components/ReporteCard";
 import ReporteDetalle from "../../components/ReporteDetalle";
 import { TIPO_UI } from "../../constants/estadoReporte";
+import { useAuth } from "../../components/AuthContext";
+import { actualizarReporte, crearReporte, escucharMisReportes, resolverReporte } from "../../services/reportes";
 import { Reporte, Tipo } from "../../types/reporte";
-
-const STORAGE_KEY = "safecuu:reportes";
 
 type Filtro = "todos" | Tipo | "resueltos";
 const FILTROS: { id: Filtro; label: string; icono: keyof typeof Ionicons.glyphMap }[] = [
@@ -20,15 +19,16 @@ const FILTROS: { id: Filtro; label: string; icono: keyof typeof Ionicons.glyphMa
   { id: "resueltos", label: "Resueltos", icono: "checkmark-circle-outline" },
 ];
 
-const siguienteFolio = (rs: Reporte[]) =>
-  String(Math.max(0, ...rs.map((r) => Number(r.id) || 0)) + 1).padStart(4, "0");
-
-
 const luego = (fn: () => void) => setTimeout(fn, 350);
 
+const mensajeDe = (e: unknown, porDefecto: string) => (e instanceof Error && e.message ? e.message : porDefecto);
+
 export default function Reportes() {
+  const { usuario } = useAuth();
+  const uid = usuario?.uid;
   const [reportes, setReportes] = useState<Reporte[]>([]);
   const [cargado, setCargado] = useState(false);
+  const [guardando, setGuardando] = useState(false);
   const [filtro, setFiltro] = useState<Filtro>("todos");
   const [busqueda, setBusqueda] = useState("");
 
@@ -37,16 +37,18 @@ export default function Reportes() {
   const [editando, setEditando] = useState<Reporte | null>(null);
   const [recienCreado, setRecienCreado] = useState<Reporte | null>(null);
 
+  // Reportes del usuario en tiempo real (con caché offline de Firestore).
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((v) => v && setReportes(JSON.parse(v)))
-      .catch(() => {})
-      .finally(() => setCargado(true));
-  }, []);
-
-  useEffect(() => {
-    if (cargado) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(reportes)).catch(() => {});
-  }, [reportes, cargado]);
+    if (!uid) return;
+    return escucharMisReportes(
+      uid,
+      (lista) => {
+        setReportes(lista);
+        setCargado(true);
+      },
+      () => setCargado(true)
+    );
+  }, [uid]);
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -54,7 +56,7 @@ export default function Reportes() {
       const pasaFiltro =
         filtro === "todos" ? true : filtro === "resueltos" ? r.estado === "resuelto" : r.tipo === filtro;
       const pasaBusqueda =
-        !q || [r.titulo, r.ubicacion, r.descripcion].some((t) => t.toLowerCase().includes(q));
+        !q || [r.titulo, r.ubicacion, r.descripcion, r.folio].some((t) => t.toLowerCase().includes(q));
       return pasaFiltro && pasaBusqueda;
     });
   }, [reportes, filtro, busqueda]);
@@ -66,22 +68,27 @@ export default function Reportes() {
     setFormAbierto(true);
   };
 
-  const guardar = (data: ReporteData) => {
+  const guardar = async (data: ReporteData) => {
+    if (!uid) return;
     setFormAbierto(false);
-    if (editando) {
-      const id = editando.id;
-      setReportes((rs) => rs.map((r) => (r.id === id ? { ...r, ...data } : r)));
-      luego(() => setDetalleId(id));
-      return;
+    setGuardando(true);
+    try {
+      if (editando) {
+        const id = editando.id;
+        await actualizarReporte(editando, data);
+        luego(() => setDetalleId(id));
+        return;
+      }
+      const creado = await crearReporte(uid, data);
+      luego(() => setRecienCreado(creado));
+    } catch (e) {
+      Alert.alert(
+        "No se pudo guardar",
+        mensajeDe(e, "Revisa tu conexión a internet e intenta de nuevo.")
+      );
+    } finally {
+      setGuardando(false);
     }
-    const creado: Reporte = {
-      ...data,
-      id: siguienteFolio(reportes),
-      fecha: new Date().toISOString(),
-      estado: "pendiente",
-    };
-    setReportes((rs) => [creado, ...rs]);
-    luego(() => setRecienCreado(creado));
   };
 
   const cerrarForm = () => {
@@ -102,8 +109,12 @@ export default function Reportes() {
     });
   };
 
-  const resolver = () =>
-    setReportes((rs) => rs.map((r) => (r.id === detalleId ? { ...r, estado: "resuelto" } : r)));
+  const resolver = () => {
+    if (!detalle) return;
+    resolverReporte(detalle).catch((e) =>
+      Alert.alert("No se pudo actualizar", mensajeDe(e, "Intenta de nuevo."))
+    );
+  };
 
   const verRecienCreado = () => {
     const id = recienCreado?.id ?? null;
@@ -129,6 +140,7 @@ export default function Reportes() {
           </View>
           <Pressable
             onPress={nuevoReporte}
+            disabled={guardando}
             accessibilityRole="button"
             accessibilityLabel="Nuevo reporte"
             className="items-center gap-1 rounded-2xl border border-[#E7E5E4] bg-white px-3 py-2 active:bg-[#FAFAF9]"
@@ -175,8 +187,17 @@ export default function Reportes() {
           })}
         </ScrollView>
 
+        {guardando && (
+          <View className="flex-row items-center gap-3 rounded-2xl bg-[#F3F2F0] px-4 py-3">
+            <ActivityIndicator color="#B84A4A" />
+            <Text className="text-[#57534E]">Guardando reporte...</Text>
+          </View>
+        )}
+
         {/* Lista / vacío */}
-        {!cargado ? null : !hayReportes ? (
+        {!cargado ? (
+          <ActivityIndicator className="pt-12" color="#B84A4A" />
+        ) : !hayReportes ? (
           <View className="items-center gap-3 px-4 pt-12">
             <View className="h-28 w-28 items-center justify-center rounded-full bg-[#F6E3E1]">
               <Ionicons name="document-text-outline" size={48} color="#3F4650" />

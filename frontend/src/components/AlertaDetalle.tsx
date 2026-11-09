@@ -89,14 +89,14 @@ export default function AlertaDetalle({ alerta, onCerrar }: Props) {
           </Text>
 
           {/* Reporte origen */}
-          {alerta.reporteId && (
+          {alerta.folio && (
             <>
               <View className="flex-row items-center gap-2">
                 <Ionicons name="link-outline" size={16} color="#1C1917" />
                 <Text accessibilityRole="header" className="font-bold text-[#1C1917]">Reporte origen</Text>
               </View>
               <View className="rounded-2xl border border-[#E7E5E4] bg-[#FAFAF9] p-3">
-                <Text className="text-sm text-[#57534E]">Folio #{alerta.reporteId}</Text>
+                <Text className="text-sm text-[#57534E]">Folio #{alerta.folio}</Text>
               </View>
             </>
           )}

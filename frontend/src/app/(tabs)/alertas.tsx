@@ -1,75 +1,14 @@
-import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AlertaCard from "../../components/AlertaCard";
 import AlertaDetalle from "../../components/AlertaDetalle";
 import { TIPO_UI } from "../../constants/estadoReporte";
 import { Alerta } from "../../types/alerta";
 import { Tipo } from "../../types/reporte";
-
-// Datos de ejemplo — reemplazar con llamada al backend cuando esté listo
-const MOCK_ALERTAS: Alerta[] = [
-  {
-    id: "1",
-    titulo: "Labrador extraviado en Col. Centro",
-    tipo: "perdido",
-    descripcion:
-      "Perro labrador dorado, collar azul, responde al nombre de Max. Visto por última vez cerca del mercado principal esta mañana.",
-    ubicacion: "Col. Centro, Chihuahua",
-    fecha: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    prioridad: "alta",
-    reporteId: "0023",
-    leida: false,
-  },
-  {
-    id: "2",
-    titulo: "Trampas ilegales detectadas en Parque Sur",
-    tipo: "peligro",
-    descripcion:
-      "Vecinos reportan trampas ilegales para animales en el parque. Se recomienda no llevar mascotas al área hasta nuevo aviso de las autoridades.",
-    ubicacion: "Parque Sur, Chihuahua",
-    fecha: new Date(Date.now() - 32 * 60 * 1000).toISOString(),
-    prioridad: "alta",
-    reporteId: "0021",
-    leida: false,
-  },
-  {
-    id: "3",
-    titulo: "Gata siamesa encontrada sin dueño",
-    tipo: "encontrado",
-    descripcion:
-      "Gata siamesa adulta, muy calmada, sin collar ni microchip visible. Encontrada en Av. Juárez. Se encuentra en resguardo temporal.",
-    ubicacion: "Av. Juárez, Chihuahua",
-    fecha: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    prioridad: "media",
-    reporteId: "0019",
-    leida: false,
-  },
-  {
-    id: "4",
-    titulo: "Perro agresivo suelto en Las Palmas",
-    tipo: "peligro",
-    descripcion:
-      "Perro de raza desconocida con comportamiento agresivo, sin dueño aparente rondando la zona residencial.",
-    ubicacion: "Fracc. Las Palmas, Chihuahua",
-    fecha: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    prioridad: "media",
-    reporteId: "0017",
-    leida: true,
-  },
-  {
-    id: "5",
-    titulo: "Tortuga mascota escapó del jardín",
-    tipo: "perdido",
-    descripcion:
-      "Tortuga de tierra, caparazón café oscuro con manchas amarillas. No hay urgencia inmediata pero se agradece reporte.",
-    ubicacion: "Col. Jardines, Chihuahua",
-    fecha: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    prioridad: "baja",
-    reporteId: "0014",
-    leida: true,
-  },
-];
+import { useAuth } from "../../components/AuthContext";
+import { escucharAlertas, marcarAlertasLeidas } from "../../services/alertas";
 
 type Filtro = "todas" | Tipo | "urgentes";
 
@@ -85,10 +24,45 @@ export default function Alertas() {
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [busqueda, setBusqueda] = useState("");
   const [detalleId, setDetalleId] = useState<string | null>(null);
+  const { usuario } = useAuth();
+  const uid = usuario?.uid;
+  const [alertas, setAlertas] = useState<Alerta[]>([]);
+  const [cargado, setCargado] = useState(false);
+
+  // "Nuevas" = creadas después de la última visita. Se fija al entrar a la pestaña y
+  // se actualiza al salir, para que las nuevas no desaparezcan mientras se ven.
+  const lecturaUsuario = usuario?.ultimaLecturaAlertas ?? null;
+  const ultimaLectura = useRef(lecturaUsuario);
+  useEffect(() => {
+    ultimaLectura.current = lecturaUsuario;
+  }, [lecturaUsuario]);
+  const [corte, setCorte] = useState<string | null>(lecturaUsuario);
+
+  useFocusEffect(
+    useCallback(() => {
+      setCorte(ultimaLectura.current);
+      return () => {
+        if (uid) marcarAlertasLeidas(uid).catch(() => {});
+      };
+    }, [uid])
+  );
+
+  useEffect(() => {
+    if (!uid) return;
+    return escucharAlertas(
+      uid,
+      corte,
+      (lista) => {
+        setAlertas(lista);
+        setCargado(true);
+      },
+      () => setCargado(true)
+    );
+  }, [uid, corte]);
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return MOCK_ALERTAS.filter((a) => {
+    return alertas.filter((a) => {
       const pasaFiltro =
         filtro === "todas"    ? true :
         filtro === "urgentes" ? a.prioridad === "alta" :
@@ -97,9 +71,9 @@ export default function Alertas() {
         !q || [a.titulo, a.ubicacion, a.descripcion].some((t) => t.toLowerCase().includes(q));
       return pasaFiltro && pasaBusqueda;
     });
-  }, [filtro, busqueda]);
+  }, [alertas, filtro, busqueda]);
 
-  const detalle = MOCK_ALERTAS.find((a) => a.id === detalleId) ?? null;
+  const detalle = alertas.find((a) => a.id === detalleId) ?? null;
   const nuevas   = visibles.filter((a) => !a.leida);
   const anteriores = visibles.filter((a) => a.leida);
 
@@ -154,7 +128,9 @@ export default function Alertas() {
         </ScrollView>
 
         {/* Lista vacía */}
-        {visibles.length === 0 ? (
+        {!cargado ? (
+          <ActivityIndicator className="pt-12" color="#B84A4A" />
+        ) : visibles.length === 0 ? (
           <View className="items-center gap-3 px-4 pt-12">
             <View className="h-28 w-28 items-center justify-center rounded-full bg-[#F6E3E1]">
               <Ionicons name="alert-circle-outline" size={48} color="#3F4650" />

@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { Text, View, StyleSheet, TextInput, Pressable } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Text, View, TextInput, Pressable } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 
-import MapView from "react-native-maps";
+import Mapa, { type MapaRef } from "../../components/Mapa";
+import { useAuth } from "../../components/AuthContext";
+import { crearAlertaRapida } from "../../services/alertas";
 
 import type { TipoAlerta, AlertaData } from "../../components/AlertaFormBase";
 import AlertaAnimalModal from "../../components/AlertaAnimalModal";
@@ -12,41 +14,34 @@ import ZonaRiesgoModal from "../../components/ZonaRiesgoModal";
 
 export default function Index() {
   const [alerta, setAlerta] = useState<TipoAlerta | null>(null);
-  const mapa = useRef<MapView>(null);
+  const mapa = useRef<MapaRef>(null);
+  const { usuario } = useAuth();
 
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
-      const { coords } = await Location.getCurrentPositionAsync({});
-      mapa.current?.animateToRegion({
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      });
-    })().catch(() => {});
+  const centrarEnMi = useCallback(async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") return;
+    const { coords } = await Location.getCurrentPositionAsync({});
+    mapa.current?.mostrarUbicacion(coords);
   }, []);
 
+  useEffect(() => {
+    centrarEnMi().catch(() => {});
+  }, [centrarEnMi]);
+
   const guardarAlerta = (data: AlertaData) => {
-    console.log("Alerta enviada:", data); // aquí conectas tu backend / AsyncStorage
+    if (!usuario) return;
+    crearAlertaRapida(usuario.uid, data)
+      .then(() => Alert.alert("Alerta publicada", "Los usuarios de tu zona ya pueden verla en Alertas."))
+      .catch((e) =>
+        Alert.alert("No se pudo publicar", e instanceof Error ? e.message : "Intenta de nuevo.")
+      );
   };
 
   return (
     <SafeAreaProvider>
       <View className="flex-1">
-        <MapView
-          ref={mapa}
-          style={StyleSheet.absoluteFill}
-          showsUserLocation
-          showsMyLocationButton
-          initialRegion={{
-            latitude: 28.6353,
-            longitude: -106.0889,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          }}
-        />
+        {/* Chihuahua mientras llega la ubicación real */}
+        <Mapa ref={mapa} inicial={{ latitude: 28.6353, longitude: -106.0889 }} zoomInicial={13} />
 
           <View pointerEvents="box-none" className="flex-1 items-center m-5 justify-between">
             <View className="flex-row items-center justify-center w-full">
@@ -59,6 +54,15 @@ export default function Index() {
                 <Ionicons name="search" size={30} color="black" />
               </Pressable>
             </View>
+
+            <Pressable
+              onPress={() => centrarEnMi().catch(() => {})}
+              accessibilityRole="button"
+              accessibilityLabel="Centrar en mi ubicación"
+              className="self-end bg-white p-3 rounded-full shadow-xl active:opacity-70"
+            >
+              <Ionicons name="locate" size={24} color="#1A73E8" />
+            </Pressable>
 
             <View className="flex-row items-end justify-center w-full gap-3">
               <Pressable

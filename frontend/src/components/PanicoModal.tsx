@@ -9,9 +9,10 @@ import Animated, {
   withSequence,
   Easing,
 } from "react-native-reanimated";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import { Contacto } from "../types/contacto";
+import { useContactos } from "../hooks/useContactos";
+import { useAuth } from "./AuthContext";
+import { registrarEventoPanico } from "../services/panico";
 import {
   EstadoEnvio,
   enviarAlertaEmergencia,
@@ -26,7 +27,6 @@ const ICONO_ESTADO: Record<EstadoEnvio, { name: keyof typeof Ionicons.glyphMap; 
   error:         { name: "close-circle",           color: "#B84A4A", texto: "Error" },
 };
 
-const STORAGE_KEY = "safecuu:contactos_emergencia";
 
 type Fase = "idle" | "enviando" | "listo";
 
@@ -38,7 +38,8 @@ type Props = {
 
 export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
   const [fase, setFase] = useState<Fase>("idle");
-  const [contactos, setContactos] = useState<Contacto[]>([]);
+  const { contactos } = useContactos();
+  const { usuario } = useAuth();
   const [resultados, setResultados] = useState<Record<string, EstadoEnvio>>({});
   const [canal, setCanal] = useState<"whatsapp" | "sms">("whatsapp");
 
@@ -92,9 +93,6 @@ export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (visible) {
-      AsyncStorage.getItem(STORAGE_KEY)
-        .then((v) => { if (v) setContactos(JSON.parse(v)); })
-        .catch(() => {});
       /* eslint-disable react-hooks/immutability */
       overlayOpacity.value = withTiming(1, { duration: 200 });
       sheetOpacity.value   = withTiming(1, { duration: 200 });
@@ -125,6 +123,14 @@ export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
       const ubicacion = await obtenerUbicacion();
       const r = await enviarAlertaEmergencia(contactos, ubicacion, setEstado);
       setCanal(r.canal);
+      // Historial en Firestore; si no hay internet se sube al reconectar.
+      if (usuario) {
+        registrarEventoPanico(usuario.uid, {
+          ubicacion,
+          canal: r.canal,
+          contactos: contactos.length,
+        }).catch(() => {});
+      }
     } catch {
       // Cualquier fallo inesperado: marcar como error lo que siga pendiente
       setResultados((prev) => {
