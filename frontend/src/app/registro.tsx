@@ -17,16 +17,13 @@ import { normalizarTelefono, useAuth } from "../components/AuthContext";
 import { TIPOS_SANGRE, TipoSangre } from "../types/usuario";
 import { elegirContactoDeAgenda } from "../utils/elegirContacto";
 
-const CORREO_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-type Errores = Partial<Record<"nombre" | "correo" | "contactoNombre" | "contactoTelefono", string>>;
+type Errores = Partial<Record<"nombre" | "telefono" | "contactoNombre" | "contactoTelefono", string>>;
 
 export default function Registro() {
-  const { registrar, telefonoVerificado, cerrarSesion } = useAuth();
-  const telefono = telefonoVerificado ?? "";
+  const { registrar, correoCuenta, cerrarSesion } = useAuth();
 
   const [nombre, setNombre] = useState("");
-  const [correo, setCorreo] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [tipoSangre, setTipoSangre] = useState<TipoSangre | null>(null);
   const [foto, setFoto] = useState<string | null>(null);
   const [contactoNombre, setContactoNombre] = useState("");
@@ -69,8 +66,7 @@ export default function Registro() {
   const validar = (): Errores => {
     const e: Errores = {};
     if (!nombre.trim()) e.nombre = "Escribe tu nombre.";
-    if (!correo.trim()) e.correo = "Escribe tu correo electrónico.";
-    else if (!CORREO_VALIDO.test(correo.trim())) e.correo = "Revisa tu correo electrónico.";
+    if (normalizarTelefono(telefono).length < 10) e.telefono = "Escribe tu celular a 10 dígitos.";
 
     const hayContacto = contactoNombre.trim() || contactoTelefono.trim();
     if (hayContacto) {
@@ -92,7 +88,7 @@ export default function Registro() {
     try {
       await registrar({
         nombre,
-        correo,
+        telefono,
         tipoSangre,
         foto,
         contactoEmergencia: contactoTelefono.trim()
@@ -113,14 +109,14 @@ export default function Registro() {
       <Pressable
         onPress={() => cerrarSesion().catch(() => {})}
         accessibilityRole="button"
-        accessibilityLabel="Usar otro número"
+        accessibilityLabel="Usar otra cuenta"
         className="flex-row items-center gap-2 self-start px-4 py-4 active:opacity-60"
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <View className="h-9 w-9 items-center justify-center rounded-full bg-[#F3F2F0]">
           <Ionicons name="chevron-back" size={22} color="#1C1917" />
         </View>
-        <Text className="text-base font-semibold text-[#1C1917]">Usar otro número</Text>
+        <Text className="text-base font-semibold text-[#1C1917]">Usar otra cuenta</Text>
       </Pressable>
 
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -130,7 +126,7 @@ export default function Registro() {
         >
           <View>
             <Text accessibilityRole="header" className="text-3xl font-bold text-[#1C1917]">
-              Crea tu <Text className="text-[#B84A4A]">cuenta</Text>
+              Completa tu <Text className="text-[#B84A4A]">perfil</Text>
             </Text>
             <Text className="mt-1 text-[#57534E]">
               Tus datos ayudan a que te encuentren rápido en una emergencia.
@@ -175,22 +171,21 @@ export default function Registro() {
               error={errores.nombre}
             />
             <CampoTexto
-              label="Número de celular (verificado)"
+              label="Número de celular"
               prefijo="+52"
+              placeholder="614 000 0000"
               value={telefono}
-              editable={false}
+              onChangeText={(v) => { setTelefono(v); limpiarError("telefono"); }}
+              keyboardType="phone-pad"
+              textContentType="telephoneNumber"
+              autoComplete="tel"
+              maxLength={14}
+              error={errores.telefono}
             />
             <CampoTexto
-              label="Correo electrónico"
-              placeholder="correo@ejemplo.com"
-              value={correo}
-              onChangeText={(v) => { setCorreo(v); limpiarError("correo"); }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="emailAddress"
-              autoComplete="email"
-              error={errores.correo}
+              label="Correo electrónico (tu cuenta)"
+              value={correoCuenta ?? ""}
+              editable={false}
             />
           </View>
 
