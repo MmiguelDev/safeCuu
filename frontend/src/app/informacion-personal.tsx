@@ -1,4 +1,4 @@
-import { useCallback, useState, type ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
 import {
   Alert,
   Image,
@@ -10,16 +10,15 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAvatar } from "../components/AvatarContext";
 import { useAuth } from "../components/AuthContext";
+import { useContactos } from "../hooks/useContactos";
 import { Contacto } from "../types/contacto";
 import { TIPOS_SANGRE, Usuario } from "../types/usuario";
 
-const STORAGE_CONTACTOS = "safecuu:contactos_emergencia";
 
 /** Campos editables de la cuenta (el celular es el usuario y no se edita). */
 type Borrador = Pick<Usuario, "nombre" | "correo" | "tipoSangre">;
@@ -131,17 +130,8 @@ export default function InformacionPersonal() {
   };
   const telefonoCuenta = cuenta?.telefono ?? "";
   const [borrador, setBorrador] = useState<Borrador | null>(null);
-  const [contactos, setContactos] = useState<Contacto[]>([]);
+  const { contactos } = useContactos();
   const { avatarUri, setAvatarUri } = useAvatar();
-
-  // Recargar contactos al volver de la pantalla de contactos de emergencia
-  useFocusEffect(
-    useCallback(() => {
-      AsyncStorage.getItem(STORAGE_CONTACTOS)
-        .then((v) => setContactos(v ? JSON.parse(v) : []))
-        .catch(() => {});
-    }, [])
-  );
 
   const editando = borrador !== null;
 

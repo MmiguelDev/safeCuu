@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "99986757639",
+    "project_id": "safecuu-393cc",
+    "storage_bucket": "safecuu-393cc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:99986757639:android:b91b402f0a83b0d1ceb2a2",
+        "android_client_info": {
+          "package_name": "com.safecuu.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmNFrcsWr8dlHKzajANjtCKQchb67rr5M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

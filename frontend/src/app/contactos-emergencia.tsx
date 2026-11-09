@@ -1,38 +1,27 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { elegirContactoDeAgenda } from "../utils/elegirContacto";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Contacto } from "../types/contacto";
-
-const STORAGE_KEY = "safecuu:contactos_emergencia";
-
-const nuevoId = () => Date.now().toString();
+import { useContactos } from "../hooks/useContactos";
+import { eliminarContacto, guardarContacto, MAX_CONTACTOS, nuevoIdContacto } from "../services/contactos";
 const soloDigitos = (s: string) => s.replace(/\D/g, "");
 
 export default function ContactosEmergencia() {
   const router = useRouter();
-  const [contactos, setContactos] = useState<Contacto[]>([]);
+  const { contactos, uid } = useContactos();
   const [form, setForm]           = useState<Partial<Contacto> | null>(null);
   const [opcionesTelefono, setOpcionesTelefono] = useState<string[]>([]);
   const [eligiendo, setEligiendo] = useState(false);
 
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((v) => { if (v) setContactos(JSON.parse(v)); })
-      .catch(() => {});
-  }, []);
-
-  const guardar = (lista: Contacto[]) => {
-    setContactos(lista);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(lista)).catch(() => {});
-  };
+  const errorAlGuardar = () => Alert.alert("Error", "No se pudo guardar el cambio. Intenta de nuevo.");
 
   const abrirForm = (c?: Contacto) => {
     setOpcionesTelefono([]);
-    setForm(c ?? { id: nuevoId(), nombre: "", telefono: "", relacion: "" });
+    if (!uid) return;
+    setForm(c ?? { id: nuevoIdContacto(uid), nombre: "", telefono: "", relacion: "" });
   };
 
   const cerrarForm = () => {
@@ -68,15 +57,16 @@ export default function ContactosEmergencia() {
       return;
     }
     const c = { ...form, nombre: form.nombre.trim(), telefono: form.telefono.trim() } as Contacto;
-    const existe = contactos.find((x) => x.id === c.id);
-    guardar(existe ? contactos.map((x) => (x.id === c.id ? c : x)) : [...contactos, c]);
+    const esNuevo = !contactos.some((x) => x.id === c.id);
+    // Firestore aplica el cambio localmente al instante (y lo sincroniza al haber red).
+    if (uid) guardarContacto(uid, c, esNuevo).catch(errorAlGuardar);
     cerrarForm();
   };
 
   const eliminar = (id: string) => {
     Alert.alert("Eliminar contacto", "¿Estás seguro?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: () => guardar(contactos.filter((c) => c.id !== id)) },
+      { text: "Eliminar", style: "destructive", onPress: () => { if (uid) eliminarContacto(uid, id).catch(errorAlGuardar); } },
     ]);
   };
 
@@ -159,7 +149,7 @@ export default function ContactosEmergencia() {
         )}
 
         {/* Botón agregar */}
-        {contactos.length < 5 && (
+        {contactos.length < MAX_CONTACTOS && (
           <Pressable
             onPress={() => abrirForm()}
             className="flex-row items-center justify-center gap-2 rounded-2xl bg-[#3F4650] py-4 active:opacity-80"

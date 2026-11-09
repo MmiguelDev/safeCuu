@@ -1,0 +1,87 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function autenticado() { return request.auth != null; }
+    function esDueno(uid) { return autenticado() && request.auth.uid == uid; }
+    function tipoValido(t) { return t in ['perdido', 'encontrado', 'peligro']; }
+    // La foto se guarda como data URI dentro del documento (sin Storage): máximo ~300 KB.
+    function fotoValida(d) {
+      return !('foto' in d) || d.foto == null || (d.foto is string && d.foto.size() <= 300000);
+    }
+
+    // ── Perfil: solo su dueño lo lee y escribe ─────────────────────────────
+    match /usuarios/{uid} {
+      allow read: if esDueno(uid);
+      allow create: if esDueno(uid)
+        && request.resource.data.nombre is string
+        && request.resource.data.nombre.size() > 0
+        && request.resource.data.telefono is string
+        && fotoValida(request.resource.data);
+      // El teléfono lo da Firebase Auth: no se puede cambiar desde la app.
+      allow update: if esDueno(uid)
+        && request.resource.data.telefono == resource.data.telefono
+        && fotoValida(request.resource.data);
+      allow delete: if false;
+
+      match /contactosEmergencia/{contactoId} {
+        allow read, write: if esDueno(uid);
+      }
+
+      // Historial de pánico: se crea y se lee, nunca se edita.
+      match /eventosPanico/{eventoId} {
+        allow read, create: if esDueno(uid);
+      }
+    }
+
+    // ── Reportes: todos los usuarios los ven, solo el autor los modifica ───
+    function estadoValido(e) { return e in ['pendiente', 'en_proceso', 'resuelto']; }
+    function fotosValidas(d) { return d.fotos is list && d.fotos.size() <= 5; }
+
+    match /reportes/{reporteId} {
+      allow read: if autenticado();
+      allow create: if autenticado()
+        && request.resource.data.autorId == request.auth.uid
+        && request.resource.data.estado == 'pendiente'
+        && request.resource.data.folio is string
+        && tipoValido(request.resource.data.tipo)
+        && fotosValidas(request.resource.data);
+      allow update: if autenticado()
+        && resource.data.autorId == request.auth.uid
+        && request.resource.data.autorId == resource.data.autorId
+        && request.resource.data.folio == resource.data.folio
+        && tipoValido(request.resource.data.tipo)
+        && estadoValido(request.resource.data.estado)
+        && fotosValidas(request.resource.data);
+      allow delete: if autenticado() && resource.data.autorId == request.auth.uid;
+    }
+
+    // ── Alertas públicas (mapa y feed) ─────────────────────────────────────
+    function prioridadValida(p) { return p in ['alta', 'media', 'baja']; }
+
+    match /alertas/{alertaId} {
+      allow read: if autenticado();
+      allow create: if autenticado()
+        && request.resource.data.autorId == request.auth.uid
+        && request.resource.data.activa == true
+        && tipoValido(request.resource.data.tipo)
+        && prioridadValida(request.resource.data.prioridad)
+        && fotoValida(request.resource.data);
+      allow update: if autenticado()
+        && resource.data.autorId == request.auth.uid
+        && request.resource.data.autorId == resource.data.autorId
+        && tipoValido(request.resource.data.tipo)
+        && prioridadValida(request.resource.data.prioridad)
+        && fotoValida(request.resource.data);
+      allow delete: if autenticado() && resource.data.autorId == request.auth.uid;
+    }
+
+    // ── Contador de folios: solo puede subir de uno en uno ─────────────────
+    match /contadores/{nombre} {
+      allow read: if autenticado();
+      allow create: if autenticado() && request.resource.data.ultimo == 1;
+      allow update: if autenticado() && request.resource.data.ultimo == resource.data.ultimo + 1;
+    }
+  }
+}
