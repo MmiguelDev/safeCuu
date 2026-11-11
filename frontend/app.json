@@ -9,8 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.safecuu.app",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "bundleIdentifier": "com.safecuu.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -20,8 +19,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.safecuu.app",
-      "googleServicesFile": "./google-services.json"
+      "package": "com.safecuu.app"
     },
     "web": {
       "output": "static",
@@ -61,8 +59,6 @@
       "expo-image",
       "expo-status-bar",
       "expo-web-browser",
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth",
       [
         "expo-build-properties",
         {

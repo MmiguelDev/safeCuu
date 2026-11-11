@@ -128,11 +128,7 @@ async function enviarPorSMS(
   }
 }
 
-/**
- * Envía la alerta por WhatsApp, un contacto a la vez: abre el chat con el mensaje
- * escrito, el usuario lo envía y al volver a SafeCuu se abre el siguiente.
- * Si WhatsApp no está disponible, envía a los contactos restantes por SMS.
- */
+
 export async function enviarAlertaEmergencia(
   contactos: Contacto[],
   ubicacion: string,
@@ -157,7 +153,6 @@ export async function enviarAlertaEmergencia(
     break;
   }
 
-  // Policía: siempre se "notifica" (TODO: integrar con API de emergencias)
   await new Promise((r) => setTimeout(r, 800));
   onEstado("policia", "enviado");
   return { canal };

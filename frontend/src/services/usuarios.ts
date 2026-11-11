@@ -1,4 +1,4 @@
-import { doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from "@react-native-firebase/firestore";
+import { doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { COL, db } from "./firebase";
 import { prepararImagen } from "./archivos";
 import { Usuario } from "../types/usuario";

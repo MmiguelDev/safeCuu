@@ -1,4 +1,4 @@
-import { addDoc, collection, serverTimestamp } from "@react-native-firebase/firestore";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { COL, db } from "./firebase";
 
 export type EventoPanico = {

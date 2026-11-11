@@ -7,7 +7,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
-} from "@react-native-firebase/firestore";
+} from "firebase/firestore";
 import { COL, db } from "./firebase";
 import { Contacto } from "../types/contacto";
 

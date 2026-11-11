@@ -8,7 +8,7 @@ import {
   serverTimestamp,
   updateDoc,
   where,
-} from "@react-native-firebase/firestore";
+} from "firebase/firestore";
 import { COL, db } from "./firebase";
 import { prepararImagen } from "./archivos";
 import { aISO } from "./usuarios";

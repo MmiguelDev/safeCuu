@@ -6,7 +6,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   type User,
-} from "@react-native-firebase/auth";
+} from "firebase/auth";
 import { auth } from "../services/firebase";
 import { actualizarPerfil, crearPerfil, escucharPerfil, type CambiosPerfil } from "../services/usuarios";
 import { guardarContacto, nuevoIdContacto } from "../services/contactos";

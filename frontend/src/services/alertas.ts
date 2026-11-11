@@ -9,7 +9,7 @@ import {
   setDoc,
   updateDoc,
   where,
-} from "@react-native-firebase/firestore";
+} from "firebase/firestore";
 import { geohashForLocation } from "geofire-common";
 import { COL, db } from "./firebase";
 import { prepararImagen } from "./archivos";
