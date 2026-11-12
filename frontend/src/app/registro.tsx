@@ -51,6 +51,28 @@ export default function Registro() {
     if (!res.canceled && res.assets[0]) setFoto(res.assets[0].uri);
   };
 
+  const tomarFoto = async () => {
+    const permiso = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permiso.granted) {
+      Alert.alert("Permiso necesario", "Permite el acceso a la cámara para tomar una foto de perfil.");
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!res.canceled && res.assets[0]) setFoto(res.assets[0].uri);
+  };
+
+  const seleccionarFoto = () =>
+    Alert.alert("Foto de perfil", "¿Cómo quieres agregar tu foto?", [
+      { text: "Tomar foto", onPress: tomarFoto },
+      { text: "Elegir de galería", onPress: elegirFoto },
+      { text: "Cancelar", style: "cancel" },
+    ]);
+
   const elegirContacto = async () => {
     if (eligiendo) return;
     setEligiendo(true);
@@ -136,7 +158,7 @@ export default function Registro() {
           {/* Foto */}
           <View className="items-center gap-2">
             <Pressable
-              onPress={elegirFoto}
+              onPress={seleccionarFoto}
               accessibilityRole="button"
               accessibilityLabel={foto ? "Cambiar foto de perfil" : "Agregar foto de perfil"}
               className="active:opacity-80"

@@ -45,7 +45,7 @@
         "expo-image-picker",
         {
           "photosPermission": "SafeCuu necesita acceso a tus fotos para adjuntarlas a reportes y alertas, y para tu foto de perfil.",
-          "cameraPermission": false,
+          "cameraPermission": "SafeCuu necesita acceso a la cámara para tomar tu foto de perfil.",
           "microphonePermission": false
         }
       ],

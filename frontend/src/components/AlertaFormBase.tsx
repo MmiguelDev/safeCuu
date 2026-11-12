@@ -102,12 +102,8 @@ export default function AlertaFormBase({
     }
   };
 
-  const elegirFoto = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.7,
-    });
-    if (res.canceled) return;
+  const guardarFoto = (res: ImagePicker.ImagePickerResult) => {
+    if (res.canceled || !res.assets[0]) return;
     const asset = res.assets[0];
     if (asset.fileSize && asset.fileSize > MAX_FOTO_BYTES) {
       Alert.alert("Imagen muy pesada", "El tamaño máximo es 10 MB.");
@@ -115,6 +111,34 @@ export default function AlertaFormBase({
     }
     setFotoUri(asset.uri);
   };
+
+  const elegirFoto = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.7,
+    });
+    guardarFoto(res);
+  };
+
+  const tomarFoto = async () => {
+    const permiso = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permiso.granted) {
+      Alert.alert("Permiso necesario", "Permite el acceso a la cámara para tomar una foto.");
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      quality: 0.7,
+    });
+    guardarFoto(res);
+  };
+
+  const agregarFoto = () =>
+    Alert.alert("Agregar foto", "¿Cómo quieres agregar la foto?", [
+      { text: "Tomar foto", onPress: tomarFoto },
+      { text: "Elegir de galería", onPress: elegirFoto },
+      { text: "Cancelar", style: "cancel" },
+    ]);
 
   const enviar = () => {
     if (!formValido) return;
@@ -265,7 +289,7 @@ export default function AlertaFormBase({
                   </View>
                 ) : (
                   <Pressable
-                    onPress={elegirFoto}
+                    onPress={agregarFoto}
                     className="items-center justify-center gap-1 py-6 border-2 border-dashed border-gray-300 rounded-xl"
                   >
                     <Ionicons name="image-outline" size={28} color="#6b7280" />
