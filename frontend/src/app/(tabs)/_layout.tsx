@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAvatar } from "../../components/AvatarContext";
 import PanicoModal from "../../components/PanicoModal";
+import AvisoAlertasCercanas from "../../components/AvisoAlertasCercanas";
 
 const Header = () => {
   const router = useRouter();
@@ -53,6 +54,7 @@ export default function TabLayout() {
 
   return (
     <>
+      <AvisoAlertasCercanas />
       <Tabs
         screenOptions={{
           header: () => <Header />,

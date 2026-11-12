@@ -9,13 +9,29 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import * as Location from "expo-location";
+import { geohashForLocation } from "geofire-common";
 import { COL, db } from "./firebase";
 import { prepararImagen } from "./archivos";
 import { aISO } from "./usuarios";
 import { prioridadDe } from "./alertas";
 import { Reporte } from "../types/reporte";
 
-export type DatosReporte = Pick<Reporte, "tipo" | "titulo" | "ubicacion" | "descripcion" | "fotos">;
+export type DatosReporte = Pick<Reporte, "tipo" | "titulo" | "ubicacion" | "descripcion" | "fotos"> & {
+  /** Coordenadas del GPS; si faltan se obtienen de la dirección escrita. */
+  coords?: { lat: number; lng: number } | null;
+};
+
+/** Convierte la dirección escrita en coordenadas (primero dentro de Chihuahua). null si no se encuentra. */
+async function coordsDeDireccion(texto: string): Promise<{ lat: number; lng: number } | null> {
+  try {
+    let r = await Location.geocodeAsync(`${texto}, Chihuahua, México`);
+    if (r.length === 0) r = await Location.geocodeAsync(texto);
+    return r[0] ? { lat: r[0].latitude, lng: r[0].longitude } : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Un documento de Firestore admite 1 MB; se deja margen para el resto de los campos. */
 const MAX_BYTES_FOTOS = 850_000;
@@ -71,6 +87,8 @@ export function escucharMisReportes(
  */
 export async function crearReporte(uid: string, datos: DatosReporte): Promise<Reporte> {
   const fotos = await prepararFotos(datos.fotos);
+  // Sin coordenadas la alerta no entra en el filtro de "a 1 km de ti".
+  const coords = datos.coords ?? (await coordsDeDireccion(datos.ubicacion));
   const refReporte = doc(colReportes);
   const refAlerta = doc(collection(db, COL.alertas));
 
@@ -99,8 +117,8 @@ export async function crearReporte(uid: string, datos: DatosReporte): Promise<Re
       tipo: datos.tipo,
       descripcion: datos.descripcion,
       ubicacion: datos.ubicacion,
-      coords: null,
-      geohash: null,
+      coords,
+      geohash: coords ? geohashForLocation([coords.lat, coords.lng]) : null,
       foto: fotos[0] ?? null,
       prioridad: prioridadDe(datos.tipo),
       activa: true,

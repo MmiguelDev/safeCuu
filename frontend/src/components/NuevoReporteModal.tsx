@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -18,8 +17,11 @@ import * as ImagePicker from "expo-image-picker";
 import { TIPO_UI } from "../constants/estadoReporte";
 import { Reporte, Tipo } from "../types/reporte";
 import { formatDia, formatHora } from "../utils/formatFecha";
+import { direccionLegible, esUbicacionValida } from "../utils/direccion";
 
-export type ReporteData = Pick<Reporte, "tipo" | "titulo" | "ubicacion" | "descripcion" | "fotos">;
+export type ReporteData = Pick<Reporte, "tipo" | "titulo" | "ubicacion" | "descripcion" | "fotos"> & {
+  coords?: { lat: number; lng: number } | null;
+};
 
 type Props = {
   inicial: Reporte | null; // null = reporte nuevo
@@ -56,17 +58,25 @@ export default function NuevoReporteModal({ inicial, onClose, onGuardar }: Props
   const [tipo, setTipo] = useState<Tipo>(inicial?.tipo ?? "peligro");
   const [titulo, setTitulo] = useState(inicial?.titulo ?? "");
   const [ubicacion, setUbicacion] = useState(inicial?.ubicacion ?? "");
+  const [coordsGPS, setCoordsGPS] = useState<{ lat: number; lng: number } | null>(null);
   const [descripcion, setDescripcion] = useState(inicial?.descripcion ?? "");
   const [fotos, setFotos] = useState<string[]>(inicial?.fotos ?? []);
   const [fecha] = useState(() => inicial?.fecha ?? new Date().toISOString());
   const [intentado, setIntentado] = useState(false);
   const [cargandoUbicacion, setCargandoUbicacion] = useState(false);
 
-  const usarUbicacionActual = async () => {
+  // Reporte nuevo: se llena la ubicación sola al abrir (sin avisos si falla).
+  useEffect(() => {
+    if (!inicial) usarUbicacionActual(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const usarUbicacionActual = async (silencioso = false) => {
     try {
       setCargandoUbicacion(true);
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
+        if (silencioso) return;
         Alert.alert("Permiso denegado", "Activa el permiso de ubicación para usar esta opción.");
         return;
       }
@@ -78,12 +88,16 @@ export default function NuevoReporteModal({ inicial, onClose, onGuardar }: Props
         ),
       ]);
       const [dir] = await Location.reverseGeocodeAsync(coords);
-      const texto = dir
-        ? [dir.street, dir.district ?? dir.subregion, dir.city].filter(Boolean).join(", ")
-        : "";
-      setUbicacion(texto || `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`);
+      const texto = direccionLegible(dir);
+      // Si el GPS solo da la ciudad, se agregan las coordenadas para que el lugar sea exacto.
+      setCoordsGPS({ lat: coords.latitude, lng: coords.longitude });
+      setUbicacion(
+        esUbicacionValida(texto)
+          ? texto
+          : `${texto ? texto + " · " : ""}${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`
+      );
     } catch {
-      Alert.alert("Error", "No se pudo obtener tu ubicación. Escríbela a mano.");
+      if (!silencioso) Alert.alert("Error", "No se pudo obtener tu ubicación. Escríbela a mano.");
     } finally {
       setCargandoUbicacion(false);
     }
@@ -100,21 +114,25 @@ export default function NuevoReporteModal({ inicial, onClose, onGuardar }: Props
     setFotos((f) => [...f, asset.uri]);
   };
 
+  const ubicacionValida = esUbicacionValida(ubicacion);
+
   const enviar = () => {
     setIntentado(true);
-    if (!titulo.trim() || !ubicacion.trim() || !descripcion.trim()) return;
+    if (!titulo.trim() || !ubicacionValida || !descripcion.trim()) return;
     onGuardar({
       tipo,
       titulo: titulo.trim(),
       ubicacion: ubicacion.trim(),
       descripcion: descripcion.trim(),
       fotos,
+      coords: coordsGPS,
     });
   };
 
   return (
     <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
+      {/* "padding" en ambos: dentro de un Modal con statusBarTranslucent, "height" no sube el contenido en Android. */}
+      <KeyboardAvoidingView behavior="padding" className="flex-1">
         <Pressable className="flex-1 items-center justify-center bg-black/40 px-4" onPress={onClose}>
           <Pressable className="w-full rounded-3xl bg-white" style={{ maxHeight: "92%" }} onPress={() => {}}>
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 16 }}>
@@ -183,19 +201,29 @@ export default function NuevoReporteModal({ inicial, onClose, onGuardar }: Props
               {/* Ubicación */}
               <View className="gap-2">
                 <Etiqueta icono="location-outline" texto="Ubicación" />
-                <View className={`${campo(intentado && !ubicacion.trim())} flex-row items-center`}>
+                <View className={`${campo(intentado && !ubicacionValida)} flex-row items-center`}>
                   <TextInput
                     value={ubicacion}
-                    onChangeText={setUbicacion}
-                    placeholder="Chihuahua, Chihuahua"
+                    onChangeText={(t) => {
+                      // Si la escribe a mano, las coordenadas se sacan de la dirección al enviar.
+                      setUbicacion(t);
+                      setCoordsGPS(null);
+                    }}
+                    placeholder={cargandoUbicacion ? "Obteniendo tu ubicación…" : "Calle y número, colonia"}
                     placeholderTextColor="#A8A29E"
                     className="h-11 flex-1 text-[#1C1917]"
                   />
                   <Ionicons name="locate-outline" size={20} color="#57534E" />
                 </View>
-                <MensajeError ver={intentado && !ubicacion.trim()} />
+                {intentado && !ubicacionValida && (
+                  <Text className="text-xs text-[#B84A4A]">
+                    {ubicacion.trim()
+                      ? "Escribe la calle o colonia, no solo la ciudad."
+                      : "Este campo es obligatorio"}
+                  </Text>
+                )}
                 <Pressable
-                  onPress={usarUbicacionActual}
+                  onPress={() => usarUbicacionActual()}
                   disabled={cargandoUbicacion}
                   accessibilityRole="button"
                   className="flex-row items-center gap-2 rounded-xl border border-[#E7E5E4] bg-[#FAFAF9] px-3 py-2"

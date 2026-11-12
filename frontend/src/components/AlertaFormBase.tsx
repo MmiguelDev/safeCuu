@@ -136,8 +136,9 @@ export default function AlertaFormBase({
       statusBarTranslucent
       onRequestClose={onClose}
     >
+      {/* "padding" en ambos: dentro de un Modal, "height" no sube el contenido en Android. */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior="padding"
         className="flex-1"
       >
         {/* Fondo oscuro: tocar fuera cierra */}

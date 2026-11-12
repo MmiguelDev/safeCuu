@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Linking, Modal, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 import Animated, {
   useSharedValue,
@@ -302,8 +302,25 @@ export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
                     </View>
                     <Ionicons name="chevron-forward" size={16} color="#B84A4A" />
                   </Pressable>
-                ) : (
-                  destinatarios.map((t) => (
+                ) : null}
+                {(sinContactos ? destinatarios.filter((t) => t.id === "policia") : destinatarios).map((t) =>
+                  t.id === "policia" ? (
+                    // Abre el marcador del teléfono con el 911 listo para llamar.
+                    <Pressable
+                      key={t.id}
+                      onPress={() => Linking.openURL("tel:911").catch(() => {})}
+                      accessibilityRole="button"
+                      accessibilityLabel="Llamar al 911"
+                      style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, backgroundColor: "#FEF2F2", borderWidth: 1, borderColor: "#F6C8C8" }}
+                    >
+                      <Ionicons name={t.icono} size={20} color="#B84A4A" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#1C1917" }}>{t.nombre}</Text>
+                        <Text style={{ fontSize: 12, color: "#57534E" }}>{t.sub}</Text>
+                      </View>
+                      <Ionicons name="call" size={18} color="#B84A4A" />
+                    </Pressable>
+                  ) : (
                     <View key={t.id} style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, backgroundColor: "#FAFAF9", borderWidth: 1, borderColor: "#E7E5E4" }}>
                       <Ionicons name={t.icono} size={20} color="#57534E" />
                       <View style={{ flex: 1 }}>
@@ -311,7 +328,7 @@ export default function PanicoModal({ visible, onClose, onConfirm }: Props) {
                         <Text style={{ fontSize: 12, color: "#57534E" }}>{t.sub}</Text>
                       </View>
                     </View>
-                  ))
+                  )
                 )}
               </View>
             )}

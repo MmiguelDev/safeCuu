@@ -2,6 +2,8 @@
 export type Coordenadas = { latitude: number; longitude: number };
 
 export type MapaRef = {
+  /** Pone un pin en un lugar buscado y centra el mapa ahí (solo celular). */
+  marcarLugar?: (c: Coordenadas, titulo: string) => void;
   /** Centra el mapa y dibuja el punto azul de "estás aquí". */
   mostrarUbicacion: (c: Coordenadas, zoom?: number) => void;
 };

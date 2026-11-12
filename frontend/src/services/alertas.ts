@@ -64,6 +64,8 @@ export function escucharAlertas(
             reporteId: x.reporteId ?? undefined,
             folio: x.folio ?? undefined,
             foto: x.foto ?? null,
+            coords: x.coords ?? null,
+            autorId: x.autorId,
             leida: x.autorId === uid || Date.parse(fecha) <= corte,
           };
         })

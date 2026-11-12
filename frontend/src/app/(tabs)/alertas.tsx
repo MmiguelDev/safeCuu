@@ -9,6 +9,7 @@ import { Alerta } from "../../types/alerta";
 import { Tipo } from "../../types/reporte";
 import { useAuth } from "../../components/AuthContext";
 import { escucharAlertas, marcarAlertasLeidas } from "../../services/alertas";
+import { estaCerca, useMiUbicacion } from "../../services/cercania";
 
 type Filtro = "todas" | Tipo | "urgentes";
 
@@ -28,6 +29,7 @@ export default function Alertas() {
   const uid = usuario?.uid;
   const [alertas, setAlertas] = useState<Alerta[]>([]);
   const [cargado, setCargado] = useState(false);
+  const { yo } = useMiUbicacion();
 
   // "Nuevas" = creadas después de la última visita. Se fija al entrar a la pestaña y
   // se actualiza al salir, para que las nuevas no desaparezcan mientras se ven.
@@ -63,6 +65,8 @@ export default function Alertas() {
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return alertas.filter((a) => {
+      // Solo alertas a RADIO_KM o menos de la ubicación actual.
+      if (!estaCerca(a, yo)) return false;
       const pasaFiltro =
         filtro === "todas"    ? true :
         filtro === "urgentes" ? a.prioridad === "alta" :
@@ -71,7 +75,7 @@ export default function Alertas() {
         !q || [a.titulo, a.ubicacion, a.descripcion].some((t) => t.toLowerCase().includes(q));
       return pasaFiltro && pasaBusqueda;
     });
-  }, [alertas, filtro, busqueda]);
+  }, [alertas, filtro, busqueda, yo]);
 
   const detalle = alertas.find((a) => a.id === detalleId) ?? null;
   const nuevas   = visibles.filter((a) => !a.leida);
@@ -89,7 +93,7 @@ export default function Alertas() {
             <Text accessibilityRole="header" className="text-3xl font-bold text-[#1C1917]">
               Mis <Text className="text-[#B84A4A]">Alertas</Text>
             </Text>
-            <Text className="text-[#57534E]">Alertas basadas en reportes de tu zona</Text>
+            <Text className="text-[#57534E]">Alertas a 1 km o menos de ti</Text>
           </View>
         </View>
 

@@ -1,6 +1,6 @@
-import { forwardRef, useImperativeHandle, useRef } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet } from "react-native";
-import MapView from "react-native-maps";
+import MapView, { Marker } from "react-native-maps";
 import { type Coordenadas, type MapaRef, type Props } from "./mapaHtml";
 
 export type { Coordenadas, MapaRef };
@@ -24,12 +24,38 @@ const Mapa = forwardRef<MapaRef, Props>(function Mapa({ inicial, zoomInicial = 1
     longitudeDelta: deltaDeZoom(zoomInicial),
   }).current;
 
+  const [lugar, setLugar] = useState<{ c: Coordenadas; titulo: string } | null>(null);
+
+  // Si piden centrar antes de que el mapa esté listo (p. ej. al abrir la app),
+  // se guarda y se aplica en onMapReady; si no, la animación se pierde.
+  const listo = useRef(false);
+  const pendiente = useRef<{ c: Coordenadas; zoom: number } | null>(null);
+
+  const centrar = (c: Coordenadas, zoom: number) => {
+    if (!listo.current) {
+      pendiente.current = { c, zoom };
+      return;
+    }
+    mapa.current?.animateToRegion(
+      { ...c, latitudeDelta: deltaDeZoom(zoom), longitudeDelta: deltaDeZoom(zoom) },
+      800
+    );
+  };
+
+  const alEstarListo = () => {
+    listo.current = true;
+    if (pendiente.current) {
+      const { c, zoom } = pendiente.current;
+      pendiente.current = null;
+      centrar(c, zoom);
+    }
+  };
+
   useImperativeHandle(ref, () => ({
-    mostrarUbicacion: (c, zoom = 16) => {
-      mapa.current?.animateToRegion(
-        { ...c, latitudeDelta: deltaDeZoom(zoom), longitudeDelta: deltaDeZoom(zoom) },
-        800
-      );
+    mostrarUbicacion: (c, zoom = 16) => centrar(c, zoom),
+    marcarLugar: (c, titulo) => {
+      setLugar({ c, titulo });
+      centrar(c, 16);
     },
   }));
 
@@ -40,7 +66,10 @@ const Mapa = forwardRef<MapaRef, Props>(function Mapa({ inicial, zoomInicial = 1
       initialRegion={regionInicial}
       showsUserLocation
       showsMyLocationButton={false}
-    />
+      onMapReady={alEstarListo}
+    >
+      {lugar && <Marker coordinate={lugar.c} title={lugar.titulo} />}
+    </MapView>
   );
 });
 

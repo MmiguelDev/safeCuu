@@ -20,13 +20,40 @@ export default function Index() {
   const centrarEnMi = useCallback(async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") return;
-    const { coords } = await Location.getCurrentPositionAsync({});
+    // La última posición conocida llega al instante; luego se afina con la actual.
+    const ultima = await Location.getLastKnownPositionAsync().catch(() => null);
+    if (ultima) mapa.current?.mostrarUbicacion(ultima.coords);
+    const { coords } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
     mapa.current?.mostrarUbicacion(coords);
   }, []);
 
   useEffect(() => {
     centrarEnMi().catch(() => {});
   }, [centrarEnMi]);
+
+  const [busqueda, setBusqueda] = useState("");
+  const [buscando, setBuscando] = useState(false);
+
+  /** Busca la dirección o lugar escrito (primero dentro de Chihuahua) y lo marca en el mapa. */
+  const buscarLugar = async () => {
+    const texto = busqueda.trim();
+    if (!texto || buscando) return;
+    setBuscando(true);
+    try {
+      let resultados = await Location.geocodeAsync(`${texto}, Chihuahua, México`);
+      if (resultados.length === 0) resultados = await Location.geocodeAsync(texto);
+      if (resultados.length === 0) {
+        Alert.alert("Sin resultados", "No encontramos ese lugar. Prueba con calle y colonia.");
+        return;
+      }
+      const { latitude, longitude } = resultados[0];
+      mapa.current?.marcarLugar?.({ latitude, longitude }, texto);
+    } catch {
+      Alert.alert("No se pudo buscar", "Revisa tu conexión e intenta de nuevo.");
+    } finally {
+      setBuscando(false);
+    }
+  };
 
   const guardarAlerta = (data: AlertaData) => {
     if (!usuario) return;
@@ -48,9 +75,19 @@ export default function Index() {
               <TextInput
                 editable
                 placeholder="Buscar"
+                value={busqueda}
+                onChangeText={setBusqueda}
+                onSubmitEditing={buscarLugar}
+                returnKeyType="search"
                 className="w-9/12 h-12 bg-white rounded-2xl px-4 text-black shadow-xl m-5"
               />
-              <Pressable className="bg-white p-2 rounded-full hover:bg-gray-200">
+              <Pressable
+                onPress={buscarLugar}
+                disabled={buscando}
+                accessibilityRole="button"
+                accessibilityLabel="Buscar lugar"
+                className="bg-white p-2 rounded-full hover:bg-gray-200"
+              >
                 <Ionicons name="search" size={30} color="black" />
               </Pressable>
             </View>

@@ -14,5 +14,9 @@ export type Alerta = {
   /** Folio del reporte origen, para mostrarlo. */
   folio?: string;
   foto?: string | null;
+  /** Dónde ocurrió; null si se publicó sin GPS. */
+  coords?: { lat: number; lng: number } | null;
+  /** uid de quien la publicó. */
+  autorId?: string;
   leida: boolean;
 };

@@ -1,5 +1,7 @@
-import { useRouter } from "expo-router";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { useCallback, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { Alert, Linking, Pressable, ScrollView, Switch, Text, View } from "react-native";
+import * as Notifications from "expo-notifications";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../components/AuthContext";
 
@@ -48,6 +50,39 @@ export default function Perfil() {
   const router = useRouter();
   const { cerrarSesion } = useAuth();
 
+  // Estado real del permiso del sistema; se revisa cada vez que se entra a Perfil
+  // (por si el usuario lo cambió desde Ajustes).
+  const [notificaciones, setNotificaciones] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      Notifications.getPermissionsAsync()
+        .then((p) => setNotificaciones(p.granted))
+        .catch(() => {});
+    }, [])
+  );
+
+  const irAAjustes = (titulo: string, mensaje: string) =>
+    Alert.alert(titulo, mensaje, [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Abrir ajustes", onPress: () => { Linking.openSettings().catch(() => {}); } },
+    ]);
+
+  const cambiarNotificaciones = async (activar: boolean) => {
+    if (!activar) {
+      // Una app no puede quitarse el permiso a sí misma: solo desde Ajustes.
+      irAAjustes("Desactivar notificaciones", "Para dejar de recibirlas, desactívalas en los ajustes del teléfono.");
+      return;
+    }
+    const actual = await Notifications.getPermissionsAsync();
+    if (actual.granted) return setNotificaciones(true);
+    if (!actual.canAskAgain) {
+      irAAjustes("Notificaciones bloqueadas", "Actívalas en los ajustes del teléfono para recibir alertas cercanas.");
+      return;
+    }
+    const { granted } = await Notifications.requestPermissionsAsync();
+    setNotificaciones(granted);
+  };
+
   const confirmarCerrarSesion = () =>
     Alert.alert("Cerrar sesión", "¿Seguro que quieres salir de tu cuenta?", [
       { text: "Cancelar", style: "cancel" },
@@ -77,7 +112,28 @@ export default function Perfil() {
             </View>
 
             <View className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-              {seccion.opciones.map((opcion, indice) => (
+              {seccion.opciones.map((opcion, indice) =>
+                opcion.ruta === "/notificaciones" ? (
+                  <View
+                    key={opcion.ruta}
+                    className={`min-h-16 flex-row items-center px-5 py-4 ${
+                      indice < seccion.opciones.length - 1 ? "border-b border-gray-100" : ""
+                    }`}
+                  >
+                    <View className="flex-1 pr-4">
+                      <Text className="text-base font-medium text-gray-800">{opcion.nombre}</Text>
+                      <Text className="text-sm text-gray-500">Alertas a 1 km de ti</Text>
+                    </View>
+                    <Switch
+                      value={notificaciones}
+                      onValueChange={(v) => { cambiarNotificaciones(v).catch(() => {}); }}
+                      accessibilityLabel="Permitir notificaciones"
+                      trackColor={{ false: "#E7E5E4", true: "#B84A4A" }}
+                      thumbColor="#FFFFFF"
+                      ios_backgroundColor="#E7E5E4"
+                    />
+                  </View>
+                ) : (
                 <Pressable
                   key={opcion.ruta}
                   accessibilityRole="button"
@@ -113,7 +169,8 @@ export default function Perfil() {
                     className="h-2 w-2 rotate-45 border-r-2 border-t-2 border-gray-400"
                   />
                 </Pressable>
-              ))}
+                )
+              )}
             </View>
           </View>
         ))}
