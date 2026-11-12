@@ -5,8 +5,8 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -28,6 +28,9 @@ const RAPIDAS: Record<AlertaData["tipo"], { tipo: Tipo; titulo: string }> = {
   animal: { tipo: "perdido", titulo: "Animal en riesgo" },
   peligro: { tipo: "peligro", titulo: "Zona de riesgo" },
 };
+
+const colReportes = collection(db, COL.reportes);
+const refContadorReportes = doc(db, COL.contadores, "reportes");
 
 /**
  * Feed público de alertas activas. `leida` se calcula contra la última vez que el
@@ -74,24 +77,49 @@ export function escucharAlertas(
   );
 }
 
-/** Publica una alerta desde los botones del mapa ("Alerta animal" / "Zona de riesgo"). */
+/** Publica una alerta rápida y su reporte enlazado desde los botones del mapa. */
 export async function crearAlertaRapida(uid: string, datos: AlertaData) {
   const { tipo, titulo } = RAPIDAS[datos.tipo];
   const foto = datos.fotoUri ? await prepararImagen(datos.fotoUri) : null;
   const coords = datos.coords ? { lat: datos.coords.latitude, lng: datos.coords.longitude } : null;
-  await setDoc(doc(collection(db, COL.alertas)), {
-    autorId: uid,
-    titulo,
-    tipo,
-    descripcion: datos.descripcion,
-    ubicacion: datos.ubicacion,
-    coords,
-    // Para buscar "alertas cerca de ti" más adelante con geofire-common.
-    geohash: coords ? geohashForLocation([coords.lat, coords.lng]) : null,
-    foto,
-    prioridad: prioridadDe(tipo),
-    activa: true,
-    creadoEn: serverTimestamp(),
+
+  const refReporte = doc(colReportes);
+  const refAlerta = doc(collection(db, COL.alertas));
+
+  await runTransaction(db, async (tx) => {
+    const contador = await tx.get(refContadorReportes);
+    const ultimo = contador.exists() ? (contador.data()?.ultimo as number) : 0;
+    const folio = String(ultimo + 1).padStart(4, "0");
+
+    tx.set(refContadorReportes, { ultimo: ultimo + 1 });
+    tx.set(refReporte, {
+      autorId: uid,
+      folio,
+      titulo,
+      tipo,
+      descripcion: datos.descripcion,
+      ubicacion: datos.ubicacion,
+      fotos: foto ? [foto] : [],
+      estado: "pendiente",
+      alertaId: refAlerta.id,
+      creadoEn: serverTimestamp(),
+    });
+    tx.set(refAlerta, {
+      autorId: uid,
+      titulo,
+      tipo,
+      descripcion: datos.descripcion,
+      ubicacion: datos.ubicacion,
+      coords,
+      // Para buscar "alertas cerca de ti" más adelante con geofire-common.
+      geohash: coords ? geohashForLocation([coords.lat, coords.lng]) : null,
+      foto,
+      prioridad: prioridadDe(tipo),
+      activa: true,
+      reporteId: refReporte.id,
+      folio,
+      creadoEn: serverTimestamp(),
+    });
   });
 }
 

@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { TIPO_UI } from "../constants/estadoReporte";
 import { Alerta, Prioridad } from "../types/alerta";
@@ -23,9 +23,18 @@ export default function AlertaCard({ alerta, onPress }: Props) {
       accessibilityLabel={`${alerta.titulo}, prioridad ${prio.label}. Ver detalles`}
       className="flex-row gap-3 rounded-[20px] border border-[#E7E5E4] bg-white p-3 active:bg-[#FAFAF9]"
     >
-      <View className="h-24 w-24 items-center justify-center rounded-2xl bg-[#F3F2F0]">
-        <Ionicons name={tipo.icono} size={32} color="#A8A29E" />
-      </View>
+      {alerta.foto ? (
+        <Image
+          source={{ uri: alerta.foto }}
+          className="h-24 w-24 rounded-2xl"
+          resizeMode="cover"
+          accessibilityLabel={`Foto de ${alerta.titulo}`}
+        />
+      ) : (
+        <View className="h-24 w-24 items-center justify-center rounded-2xl bg-[#F3F2F0]">
+          <Ionicons name={tipo.icono} size={32} color="#A8A29E" />
+        </View>
+      )}
 
       <View className="flex-1 gap-1">
         <View className="flex-row items-start justify-between gap-2">

@@ -1,4 +1,4 @@
-import { Linking, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Linking, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { TIPO_UI } from "../constants/estadoReporte";
@@ -44,10 +44,19 @@ export default function AlertaDetalle({ alerta, onCerrar }: Props) {
         </Pressable>
 
         <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 4, gap: 14 }}>
-          {/* Icono grande */}
-          <View className="h-40 items-center justify-center rounded-3xl bg-[#F3F2F0]">
-            <Ionicons name={tipo.icono} size={56} color="#A8A29E" />
-          </View>
+          {/* Foto o icono */}
+          {alerta.foto ? (
+            <Image
+              source={{ uri: alerta.foto }}
+              className="h-52 w-full rounded-3xl"
+              resizeMode="cover"
+              accessibilityLabel={`Foto de ${alerta.titulo}`}
+            />
+          ) : (
+            <View className="h-40 items-center justify-center rounded-3xl bg-[#F3F2F0]">
+              <Ionicons name={tipo.icono} size={56} color="#A8A29E" />
+            </View>
+          )}
 
           {/* Título y prioridad */}
           <View className="flex-row items-start justify-between gap-2">
